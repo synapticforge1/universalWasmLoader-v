@@ -30,23 +30,25 @@ so the WIT type is unambiguous, and pick the call by its result type
 ## Build & run
 
 ```sh
-scripts/fetch-wasmtime.sh        # downloads the wasmtime C API SDK into vendor/ (gitignored)
+v run scripts/fetch-wasmtime.vsh   # downloads the wasmtime C API SDK into vendor/ (gitignored)
 ```
 
 V's default `tcc` cannot link the wasmtime import library, so pick a C compiler:
 
 **Use Zig as the C compiler** (recommended — no separate MinGW install needed; Zig
-bundles a C toolchain). A small wrapper adapts Zig for V (see notes below):
+bundles a C toolchain). A small V tool, `scripts/zigcc.v`, adapts Zig for V
+(see notes below). Build it once, then pass it to V:
 
 ```sh
-v -cc "$(pwd -W)/scripts/zigcc.bat" run examples/adder.v
+v -o scripts/zigcc.exe scripts/zigcc.v
+v -cc "$(pwd -W)/scripts/zigcc.exe" run examples/adder.v
 ```
 
 Make it the default for every `v` command in the shell via `VFLAGS` (use a
 Windows-style path):
 
 ```sh
-export VFLAGS="-cc $(pwd -W)/scripts/zigcc.bat"
+export VFLAGS="-cc $(pwd -W)/scripts/zigcc.exe"
 v run examples/adder.v
 ```
 
@@ -87,12 +89,11 @@ the wasmtime headers, keeping them out of V's translation unit.
 
 - **Choose a C compiler** (V's default `tcc` cannot link the wasmtime import
   library):
-  - **Zig** (`scripts/zigcc.bat`) — needs only `zig` on `PATH` (the wrapper
-    dispatches to PowerShell, `scripts/zigcc.ps1`; no Git Bash required). It
+  - **Zig** (`scripts/zigcc.exe`, built from `scripts/zigcc.v` with V's default
+    compiler) — needs only `zig` on `PATH`; no Git Bash or PowerShell. It
     compiles via `zig cc`, forces the `x86_64-windows-gnu` target, and strips
     V's hardcoded `-Wl,-stack=` flag (V emits it in MSVC form, which Zig's
-    bundled `lld` rejects). On Linux/macOS use `scripts/zigcc.sh` (or `zig cc`
-    directly).
+    bundled `lld` rejects).
   - **MinGW gcc** (`-cc gcc`) — needs a MinGW gcc on `PATH`.
 - **`wasmtime.dll` must be findable at runtime** — copy
   `vendor/.../lib/wasmtime.dll` next to your binary (or the repo root for
@@ -104,6 +105,8 @@ the wasmtime headers, keeping them out of V's translation unit.
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
 - Host import callbacks are not yet exposed from V (pure-compute / library
   modules only).
+- Maintainers: releases use `v run scripts/bump-version.vsh <major|minor|patch>`,
+  then `scripts/release.vsh`, then `scripts/publish.vsh` (each takes `--help`).
 
 ## License
 

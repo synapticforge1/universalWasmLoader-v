@@ -26,8 +26,11 @@ native V values and `!`/`or` error handling. See [`README.md`](README.md) for us
   loader's value constructors are `static inline` / awkward to pass by value).
 - `uwl/universal_wasm_loader.h` — vendored copy of the upstream C loader (the C header keeps its
   upstream filename; the V module directory is `uwl/`).
-- `scripts/fetch-wasmtime.sh` — fetches the wasmtime C API SDK into `vendor/` (gitignored).
-- `scripts/zigcc.{bat,ps1,sh}` — Zig-as-C-compiler wrapper (V's default `tcc` can't link wasmtime).
-- `scripts/bump-version.{sh,nu}` / `release.{sh,nu}` / `publish.{sh,nu}` — the release toolchain
+- **Scripts are V only** (`.vsh`, or a built V program); no Bash/Nushell/PowerShell/`.bat`. See
+  `cmem/INDEX.md` Policy "Scripts are V".
+- `scripts/fetch-wasmtime.vsh` — fetches the wasmtime C API SDK into `vendor/` (gitignored).
+- `scripts/zigcc.v` — Zig-as-C-compiler tool (V's default `tcc` can't link wasmtime). Build once:
+  `v -o scripts/zigcc.exe scripts/zigcc.v` (binary gitignored).
+- `scripts/bump-version.vsh` / `release.vsh` / `publish.vsh` — the release toolchain
   (`v.mod` version is the single source of truth; publish is a deliberate, separate, VPM step).
-- Run the example: `export VFLAGS="-cc $(pwd -W)/scripts/zigcc.bat"; v run examples/adder.v`.
+- Run the example: `export VFLAGS="-cc $(pwd -W)/scripts/zigcc.exe"; v run examples/adder.v`.

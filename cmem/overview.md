@@ -43,12 +43,12 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
-  `scripts/publish.{sh,nu}` say `synapticforge1.uwl`. The only `jrmarcum` strings left outside
+  `scripts/publish.vsh` says `synapticforge1.uwl`. The only `jrmarcum` strings left outside
   `cmem/` are the JSR scope `@jrmarcum/universal-wasm-loader` in the vendored header, which is
   correct. (The owner removed the README's JSR sentence on GitHub in `61cb1e9`, 2026-10-21.)
 - **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
   (`release` uses the local `gh`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
-  depends on repo secrets or Actions surviving the transfer. `release.{sh,nu}` push to `origin`, so
+  depends on repo secrets or Actions surviving the transfer. `release.vsh` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
 ## Current state — IMPLEMENTED v1 (2026-06-19)
@@ -70,10 +70,11 @@ Working tree:
   release being targeted.
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`). `examples/math_50.wasm` +
   `math_50.wit` are the reference fixture.
-- `scripts/fetch-wasmtime.sh` — downloads the wasmtime C API SDK into `vendor/` (gitignored).
-- `scripts/zigcc.{bat,ps1,sh}` — the Zig-as-C-compiler wrapper (see "How it links").
-- `scripts/bump-version.{sh,nu}` / `release.{sh,nu}` / `publish.{sh,nu}` — the release toolchain, in
-  Bash and equivalent cross-platform Nushell forms (see "Release / publish flow").
+- `scripts/fetch-wasmtime.vsh` — downloads the wasmtime C API SDK into `vendor/` (gitignored).
+- `scripts/zigcc.v` — the Zig-as-C-compiler tool, built to `scripts/zigcc.exe` (gitignored; see
+  "How it links").
+- `scripts/bump-version.vsh` / `release.vsh` / `publish.vsh` — the release toolchain (see
+  "Release / publish flow"). All scripts are V, one form each (Policy "Scripts are V" in `INDEX.md`).
 - `vendor/` — wasmtime C API SDK (headers + `libwasmtime.dll.a` + `wasmtime.dll`). **gitignored**;
   fetched on demand. `wasmtime.dll` is also staged at the repo root for `v run` (gitignored).
 - `LICENSE` — MIT (Copyright (c) 2026 Jon Marcum), identical text to the `-c` port. README License
@@ -140,17 +141,18 @@ userenv ntdll ole32 Shlwapi advapi32 kernel32 uuid`).
 
 Two compiler paths (README "Requirements & notes"):
 
-- **Zig as the C compiler (recommended)** — `scripts/zigcc.bat` (Windows; dispatches to
-  `scripts/zigcc.ps1`, no Git Bash needed) or `scripts/zigcc.sh` (Unix). The wrapper runs `zig cc
-  -target x86_64-windows-gnu` and strips V's hardcoded MSVC-form `-Wl,-stack=` flag, which Zig's
-  bundled `lld` rejects. Use it via `v -cc <wrapper> run ...` or `export VFLAGS="-cc <wrapper>"`.
-  **`zigcc.ps1` forwards the raw command line, not `$args` (fixed 2026-10-21).** `powershell -File`
-  binds an argument like `-I"C:\dir"` as a named parameter `-IC:`. It then splits the argument into
-  `-IC` and `\dir`, and the colon is lost. V 0.5.2 sends exactly that when it compiles its bundled
-  libgc, so the old `$args` loop failed with `\…\libgc\include: unrecognized file extension`. The
-  script now takes the text after `-File <script>` from `[Environment]::CommandLine`, strips
-  `-Wl,-stack=`, rewrites any `@*.rsp` files, and starts `zig` with that string unchanged. zig then
-  re-parses it with standard Windows quoting rules.
+- **Zig as the C compiler (recommended)** — `scripts/zigcc.v`, a small V program built once with
+  V's default compiler (`v -o scripts/zigcc.exe scripts/zigcc.v`; `release.vsh` builds it on first
+  use). It runs `zig cc -target x86_64-windows-gnu`, copies each `@*.rsp` response file to
+  `*.zig.rsp` without V's hardcoded MSVC-form `-Wl,-stack=<n>` (which Zig's bundled `lld` rejects),
+  drops that flag from direct arguments too, and passes everything else through `os.Process`, which
+  re-quotes each argument with the Windows rules. Use it via `v -cc <path>/zigcc.exe run ...` or
+  `export VFLAGS="-cc <path>/zigcc.exe"`.
+  **History (2026-10-21):** it replaced `zigcc.{bat,ps1,sh}`. The `.bat` → `powershell -File` chain
+  broke on V 0.5.2: PowerShell binds an argument like `-I"C:\dir"` as a named parameter `-IC:` and
+  splits it into `-IC` and `\dir`, losing the colon. V 0.5.2 passes exactly that when it compiles
+  its bundled libgc (`\…\libgc\include: unrecognized file extension`). A V binary gets its argv
+  from the C runtime, so the problem cannot recur. Verified with a cold `~/.vmodules/.cache`.
 - **MinGW gcc** — `v -cc gcc run ...` (needs MinGW gcc on `PATH`).
 
 `wasmtime.dll` must be findable at runtime: it is staged at the repo root for `v run` (and lives in
@@ -158,11 +160,16 @@ the SDK `lib/`).
 
 ## Build / run flow
 
-- `scripts/fetch-wasmtime.sh [VERSION] [PLATFORM]` — fetch the wasmtime C API SDK into `vendor/`
-  (needs `curl`, `unzip`; defaults `45.0.2` / `x86_64-mingw`).
+- `v run scripts/fetch-wasmtime.vsh [VERSION] [PLATFORM]` — fetch the wasmtime C API SDK into
+  `vendor/` (pure V: `net.http` download with 3 attempts + `compress.szip` extract; defaults
+  `45.0.2` / `x86_64-mingw`). **Windows SDKs only** (`*-mingw`, `*-windows`): wasmtime ships the
+  Linux/macOS C API as `.tar.xz`, which the old `.sh` (`unzip`) could not unpack either; the script
+  now refuses those platforms up front. Note `szip.extract_zip_to_dir` returns `false` on failure
+  rather than an error, so the script checks the result.
 - Run the example (Zig-cc path, from the repo root):
   ```sh
-  export VFLAGS="-cc $(pwd -W)/scripts/zigcc.bat"   # Windows; on Unix use scripts/zigcc.sh
+  v -o scripts/zigcc.exe scripts/zigcc.v            # once
+  export VFLAGS="-cc $(pwd -W)/scripts/zigcc.exe"
   v run examples/adder.v
   ```
   Expected output:
@@ -173,42 +180,44 @@ the SDK `lib/`).
   ```
   **Verified 2026-06-19** (V 0.5.1 + Zig 0.16.0, wasmtime v45.0.2) — matches the README.
   **Re-verified 2026-10-21** after V was reinstalled (**V 0.5.2 `7647ce1`** + Zig 0.16.0, wasmtime
-  v45.0.2). The same output was printed once the `zigcc.ps1`
-  argument fix above was in place.
+  v45.0.2), through the V `zigcc` tool.
 
-## Release / publish flow (AUTHORED 2026-06-19)
+## Release / publish flow (AUTHORED 2026-06-19; ported to V 2026-10-21)
 
-**Pending migration (2026-10-21):** all scripts below are legacy under the repo's "Scripts are V"
-rule (`cmem/INDEX.md`). They are to be ported to `.vsh` (and the `zigcc` wrapper to a built V
-program), keeping one form each. The description below documents them as they are today.
+The version in `v.mod` (the `version:` field) is the **single source of truth**. Three V scripts, run
+in order (`v run scripts/<name>.vsh`, each takes `--help`), keep the git tag, GitHub Release, and VPM
+listing consistent with it.
 
-The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run in
-order, keep the git tag, GitHub Release, and VPM listing consistent with it. Each ships in **two
-equivalent forms** (same flags/guards/behavior — including error messages and exit codes): a Bash
-`.sh` and a cross-platform Nushell `.nu` (needs `nu` ≥0.113; runs on Windows/macOS/Linux without Git
-Bash). Use whichever the machine has — e.g. `nu scripts/release.nu` or `bash scripts/release.sh`.
-`fetch-wasmtime.sh` and the `zigcc` wrappers stay as they are (dev setup, not part of the release
-toolchain). **Parity note (2026-06-19):** `bump-version.nu` takes its `spec` as an *optional*
-positional and checks for it explicitly, so a missing spec prints the same friendly
-`error: missing bump spec …` and exits `2` as the `.sh` form — rather than Nushell's bare
-`missing_positional` parser error with a different exit code.
+**Port to V (2026-10-21).** The Bash `.sh` and Nushell `.nu` pairs were replaced by one `.vsh` each,
+and all 10 old script files were deleted. The ports keep the same flags, guards, messages and exit
+codes (`2` for usage errors, `1` for failed guards; a failing child command exits with its code).
+They run external commands through `os.Process` with argument lists, never through a shell. Only
+deliberate differences: a missing value for `--notes`/`--remote` is a clear `exit 2`, and the
+`+ command` echo is flushed before each child runs so piped logs stay in order.
+**Verified end to end** in a throwaway clone with a local bare remote: a real `bump-version patch`
+commit, `release --no-release` (built `zigcc.exe` from scratch, ran the example, tagged, pushed
+branch + tag), `publish` (tag found locally and on the remote), a re-run of `release` (reused the
+tag), and the "tag already exists" and dirty-tree guards. Not exercised against GitHub: the
+`gh release create` path (identical logic to the `.sh`).
+V script-mode gotcha: in a `.vsh`, all `fn` definitions must come **before** the first top-level
+statement.
 
-1. **`scripts/bump-version.{sh,nu}` `<major|minor|patch|X.Y.Z>`** — rewrites the `version:` field in
+1. **`scripts/bump-version.vsh` `<major|minor|patch|X.Y.Z>`** — rewrites the `version:` field in
    `v.mod` and commits the isolated bump. Guards: clean tree, strictly-greater target, no pre-existing
    tag, valid semver. `--dry-run` / `--no-commit`.
-2. **`scripts/release.{sh,nu}`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
-   `v run examples/adder.v` build (Zig-cc path, OS-aware; honours `$VFLAGS` if it already sets `-cc`,
-   else uses the `zigcc` wrapper when `zig` is on `PATH`), tags `v<version>`, pushes branch + tag to
+2. **`scripts/release.vsh`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
+   `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
+   `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`), tags `v<version>`, pushes branch + tag to
    `origin`, and creates the matching **GitHub Release** via `gh` (skippable). Idempotent (reuses a
    tag only if it points at HEAD; skips an existing Release; degrades if `gh` is unauthenticated).
    Does **not** publish to VPM. `--dry-run` / `--no-release` / `--no-build` / `--remote`.
-3. **`scripts/publish.{sh,nu}`** — the deliberate VPM step, decoupled from `release`. **VPM has no
+3. **`scripts/publish.vsh`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
    https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
    synapticforge1.uwl` clones the repo and `v update` pulls new commits. So this script is
    a **clearly-logged no-op**: it reads the version, verifies the `v<version>` tag exists locally + on
    `origin` (so you "publish" exactly what was released), then prints the one-time registration
-   instructions and that updates resolve off the pushed repo. Kept present (both forms) so the
+   instructions and that updates resolve off the pushed repo. Kept present so the
    three-script shape is identical across all ports. `--dry-run` / `--yes` / `--allow-dirty` /
    `--skip-tag-check` / `--remote`.
 
