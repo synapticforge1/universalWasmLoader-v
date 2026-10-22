@@ -1,6 +1,6 @@
 # universalWasmLoader-v
 
-Idiomatic **V** binding for the [Universal WASM Loader](https://github.com/jrmarcum/universalWasmLoader-c).
+Idiomatic **V** binding for the [Universal WASM Loader](https://github.com/synapticforge1/universalWasmLoader-c).
 It wraps the C single-header loader so you call `.wasm` exports with native V
 values and `!`/`or` error handling.
 
@@ -101,7 +101,7 @@ the wasmtime headers, keeping them out of V's translation unit.
   static archive (which pulls in the Rust std unwinder).
 - The vendored C loader header is `uwl/universal_wasm_loader.h`;
   keep it in sync with the upstream
-  [`universalWasmLoader-c`](https://github.com/jrmarcum/universalWasmLoader-c) release you target.
+  [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
 - Host import callbacks are not yet exposed from V (pure-compute / library
   modules only).
 

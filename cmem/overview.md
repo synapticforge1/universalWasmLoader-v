@@ -4,7 +4,7 @@
 
 `universalWasmLoader-v` is the **idiomatic V binding** of the Universal WASM Loader family. It is a
 thin wrapper over the C single-header loader
-([`universalWasmLoader-c`](https://github.com/jrmarcum/universalWasmLoader-c)) — the V sibling of the
+([`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c)) — the V sibling of the
 reference JS loader [`@jrmarcum/universal-wasm-loader`](https://jsr.io/@jrmarcum/universal-wasm-loader).
 The hard parts (WIT parsing, Canonical ABI marshalling, `cabi_post` string returns, version pinning)
 live **once** in the C loader; this repo only adds a V-native call surface (a small C shim + a V
@@ -14,13 +14,39 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, v1.0.0, MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, v1.1.0 as of 2026-10-21, MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
   `jrmarcum.uwl`, installed via `v install jrmarcum.uwl`). The V module is correspondingly `module uwl`
   in the `uwl/` directory and imported as `import uwl` — matching how the `-zig` sibling exposes its
   importable module as `uwl` even though its package name is longer.
+
+## Repository home — `synapticforge1` organization (recorded 2026-10-21)
+
+The owner **transferred the GitHub repo from the personal account `jrmarcum` to the owner-controlled
+`synapticforge1` organization**. Canonical URL: **https://github.com/synapticforge1/universalWasmLoader-v**
+(`git ls-remote` verified 2026-10-21: its `HEAD` is `c21df51`, the same as local `main`). The old
+`jrmarcum/...` URL still works through GitHub's transfer redirect. Sibling loaders moved with it,
+including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference package name
+`@jrmarcum/universal-wasm-loader` is a JSR-scope fact and is **not** changed by the move.
+
+- **VPM name stays `jrmarcum.uwl`.** VPM prefixes a package with the *registering user's* GitHub
+  username, not the repo owner. The package is registered (id 721, author `jrmarcum`, created
+  2026-06-19). **Its stored `url` is still `https://github.com/jrmarcum/universalWasmLoader-v.git`**
+  (VPM API checked 2026-10-21), so `v install jrmarcum.uwl` works only through the GitHub redirect.
+  The redirect breaks if a `jrmarcum/universalWasmLoader-v` repo is ever created again.
+  **Owner-gated follow-up:** while logged in to vpm.vlang.io as `jrmarcum`, change the package URL to the
+  `synapticforge1` URL.
+- **Links updated (2026-10-21):** the local `origin` remote now points to
+  `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
+  `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
+  remaining `jrmarcum` strings are intentional: the JSR scope `@jrmarcum/universal-wasm-loader`
+  (README, the vendored header) and `jrmarcum.uwl` in `scripts/publish.{sh,nu}` (see above).
+- **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
+  (`release` uses the local `gh`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
+  depends on repo secrets or Actions surviving the transfer. `release.{sh,nu}` push to `origin`, so
+  they follow whichever URL `origin` holds.
 
 ## Current state — IMPLEMENTED v1 (2026-06-19)
 
@@ -115,6 +141,13 @@ Two compiler paths (README "Requirements & notes"):
   `scripts/zigcc.ps1`, no Git Bash needed) or `scripts/zigcc.sh` (Unix). The wrapper runs `zig cc
   -target x86_64-windows-gnu` and strips V's hardcoded MSVC-form `-Wl,-stack=` flag, which Zig's
   bundled `lld` rejects. Use it via `v -cc <wrapper> run ...` or `export VFLAGS="-cc <wrapper>"`.
+  **`zigcc.ps1` forwards the raw command line, not `$args` (fixed 2026-10-21).** `powershell -File`
+  binds an argument like `-I"C:\dir"` as a named parameter `-IC:`. It then splits the argument into
+  `-IC` and `\dir`, and the colon is lost. V 0.5.2 sends exactly that when it compiles its bundled
+  libgc, so the old `$args` loop failed with `\…\libgc\include: unrecognized file extension`. The
+  script now takes the text after `-File <script>` from `[Environment]::CommandLine`, strips
+  `-Wl,-stack=`, rewrites any `@*.rsp` files, and starts `zig` with that string unchanged. zig then
+  re-parses it with standard Windows quoting rules.
 - **MinGW gcc** — `v -cc gcc run ...` (needs MinGW gcc on `PATH`).
 
 `wasmtime.dll` must be findable at runtime: it is staged at the repo root for `v run` (and lives in
@@ -136,6 +169,9 @@ the SDK `lib/`).
   square(5) = 25
   ```
   **Verified 2026-06-19** (V 0.5.1 + Zig 0.16.0, wasmtime v45.0.2) — matches the README.
+  **Re-verified 2026-10-21** after V was reinstalled (**V 0.5.2 `7647ce1`** + Zig 0.16.0, wasmtime
+  v45.0.2). The same output was printed once the `zigcc.ps1`
+  argument fix above was in place.
 
 ## Release / publish flow (AUTHORED 2026-06-19)
 
@@ -186,6 +222,12 @@ facing steps that remain (owner-gated): push the remaining commit(s), push the `
 GitHub Release via `release`, and register the repo once at https://vpm.vlang.io/new (`publish` is
 otherwise a no-op). The tag is what a tag/repo-resolving
 registry (VPM, like Go) uses; there is no separate package upload for this ecosystem.
+
+**Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
+v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
+`origin/main`. The `v1.0.0` tag exists **only locally** and was never pushed. The VPM package was
+registered on 2026-06-19 (see "Repository home"). Whether a v1.1.0 GitHub Release exists was not
+checked.
 
 ## Known gaps / not yet done
 
