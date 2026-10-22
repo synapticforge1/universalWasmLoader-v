@@ -34,4 +34,4 @@ the exact build command and output).
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM `jrmarcum.uwl` URL still old), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |
+| [overview.md](overview.md) | What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |

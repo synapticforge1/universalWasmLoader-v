@@ -6,7 +6,7 @@
 # VPM has NO upload/CLI publish command. Like Go modules, VPM resolves a package
 # from the git repository itself: a module is registered ONCE by submitting its
 # git repo URL at https://vpm.vlang.io/new (no auth token, no per-version
-# upload). After that, `v install jrmarcum.uwl` clones the repo
+# upload). After that, `v install synapticforge1.uwl` clones the repo
 # and `v update` pulls new commits. There is nothing to upload per release — the
 # pushed tag/commit IS the published artifact once the repo is registered.
 #
@@ -87,8 +87,8 @@ def main [
   print $"  1. ONE-TIME registration: submit the repo URL at https://vpm.vlang.io/new"
   print $"       repo: ($origin_url)"
   print "     Once registered the module is installable as:"
-  print $"       v install <your-github-username>.($module_disp)"
-  print $"       \(VPM prepends your GitHub username, e.g. jrmarcum.($module_disp))"
+  print $"       v install <repo-owner>.($module_disp)"
+  print $"       \(VPM prepends the repo's GitHub owner, e.g. synapticforge1.($module_disp))"
   print "  2. UPDATES: there is no per-version upload. Consumers get new code by"
   print "       v update <module>"
   print $"     which pulls the repo. So pushing ($tag) \(done by scripts/release.nu) is all"

@@ -18,7 +18,8 @@ module) on top.
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
-  `jrmarcum.uwl`, installed via `v install jrmarcum.uwl`). The V module is correspondingly `module uwl`
+  **`synapticforge1.uwl`** since 2026-10-22, installed via `v install synapticforge1.uwl`; the
+  original `jrmarcum.uwl` listing still exists, see "Repository home"). The V module is correspondingly `module uwl`
   in the `uwl/` directory and imported as `import uwl` — matching how the `-zig` sibling exposes its
   importable module as `uwl` even though its package name is longer.
 
@@ -31,18 +32,20 @@ The owner **transferred the GitHub repo from the personal account `jrmarcum` to 
 including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference package name
 `@jrmarcum/universal-wasm-loader` is a JSR-scope fact and is **not** changed by the move.
 
-- **VPM name stays `jrmarcum.uwl`.** VPM prefixes a package with the *registering user's* GitHub
-  username, not the repo owner. The package is registered (id 721, author `jrmarcum`, created
-  2026-06-19). **Its stored `url` is still `https://github.com/jrmarcum/universalWasmLoader-v.git`**
-  (VPM API checked 2026-10-21), so `v install jrmarcum.uwl` works only through the GitHub redirect.
-  The redirect breaks if a `jrmarcum/universalWasmLoader-v` repo is ever created again.
-  **Owner-gated follow-up:** while logged in to vpm.vlang.io as `jrmarcum`, change the package URL to the
-  `synapticforge1` URL.
+- **VPM: now `synapticforge1.uwl` (owner registered it 2026-10-22).** VPM prefixes the package name
+  with the **repo's GitHub owner**, not the registering user. Proof: the new listing is id 771, name
+  `synapticforge1.uwl`, url `https://github.com/synapticforge1/universalWasmLoader-v.git`, and its
+  author is still `jrmarcum`. The install command is `v install synapticforge1.uwl`. The original
+  listing **`jrmarcum.uwl` (id 721) still exists** with the old `jrmarcum/...` url, which resolves
+  only through GitHub's redirect (VPM API checked 2026-10-22). Retiring it is the owner's call. The
+  new listing's description shows `â` where an em dash was pasted (an encoding glitch on VPM's side
+  or in the paste), so it is worth re-typing as `-` if VPM allows editing.
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
-  remaining `jrmarcum` strings are intentional: the JSR scope `@jrmarcum/universal-wasm-loader`
-  (README, the vendored header) and `jrmarcum.uwl` in `scripts/publish.{sh,nu}` (see above).
+  `scripts/publish.{sh,nu}` say `synapticforge1.uwl`. The only `jrmarcum` strings left outside
+  `cmem/` are the JSR scope `@jrmarcum/universal-wasm-loader` in the vendored header, which is
+  correct. (The owner removed the README's JSR sentence on GitHub in `61cb1e9`, 2026-10-21.)
 - **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
   (`release` uses the local `gh`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
   depends on repo secrets or Actions surviving the transfer. `release.{sh,nu}` push to `origin`, so
@@ -198,7 +201,7 @@ positional and checks for it explicitly, so a missing spec prints the same frien
 3. **`scripts/publish.{sh,nu}`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
    https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
-   jrmarcum.uwl` clones the repo and `v update` pulls new commits. So this script is
+   synapticforge1.uwl` clones the repo and `v update` pulls new commits. So this script is
    a **clearly-logged no-op**: it reads the version, verifies the `v<version>` tag exists locally + on
    `origin` (so you "publish" exactly what was released), then prints the one-time registration
    instructions and that updates resolve off the pushed repo. Kept present (both forms) so the
