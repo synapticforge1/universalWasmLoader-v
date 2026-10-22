@@ -178,6 +178,10 @@ the SDK `lib/`).
 
 ## Release / publish flow (AUTHORED 2026-06-19)
 
+**Pending migration (2026-10-21):** all scripts below are legacy under the repo's "Scripts are V"
+rule (`cmem/INDEX.md`). They are to be ported to `.vsh` (and the `zigcc` wrapper to a built V
+program), keeping one form each. The description below documents them as they are today.
+
 The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run in
 order, keep the git tag, GitHub Release, and VPM listing consistent with it. Each ships in **two
 equivalent forms** (same flags/guards/behavior — including error messages and exit codes): a Bash
