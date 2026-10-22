@@ -2,8 +2,7 @@
 
 Idiomatic **V** binding for the [Universal WASM Loader](https://github.com/jrmarcum/universalWasmLoader-c).
 It wraps the C single-header loader so you call `.wasm` exports with native V
-values and `!`/`or` error handling — the V sibling of the reference JS loader
-[`@jrmarcum/universal-wasm-loader`](https://jsr.io/@jrmarcum/universal-wasm-loader).
+values and `!`/`or` error handling.
 
 The hard parts (WIT parsing, Canonical ABI marshalling, `cabi_post` string
 returns, version pinning) live **once**, in the C loader. This repo is a thin
