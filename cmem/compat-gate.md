@@ -40,10 +40,11 @@ The verdict is read from V's per-file summary line and the exit code.
 
 **The version line** is `v.mod` `version:`; `bump-version.ts` takes `major|minor|patch` only (the
 explicit `X.Y.Z` form the `.vsh` accepted is gone — workspace SemVer rule) and refuses unless the
-version equals the last release tag. **`v1.1.0` has no tests**, so the first bump after it prints
-`NOTHING TO RUN (Rule 3 unverified for this step)` and proceeds — Rule 3 starts biting at the first
-tag that carries `tests/uwl_test.v`. Measured 2026-10-26: floor vs `v1.1.0` = patch (`uwl/`'s public
-API unchanged since; only a doc comment moved).
+version equals the last release tag. **`v1.1.0` had no tests**, so the bump to 1.1.1 printed
+`NOTHING TO RUN (Rule 3 unverified for this step)` and proceeded (floor patch: `uwl/`'s public API
+unchanged since `v1.1.0`; only a doc comment moved). **`v1.1.1` (2026-10-26) is the first tag with
+`tests/uwl_test.v`, so Rule 3 now runs:** measured the same day, `compat.ts` → `previous-tag tests
+(v1.1.1 tests/ vs current uwl/): GREEN — 42 asserts passed`; floor vs `v1.1.1` = patch.
 
 **Consumers (Rule 3, second half):** none known; wasmtk's H6.5b consumer suites name this repo's
 suite as one to exist.

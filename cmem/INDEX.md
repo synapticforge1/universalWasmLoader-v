@@ -93,7 +93,7 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What the port is, repo home + VPM name (1.1.1 published, install-verified 2026-10-26), API surface, linking via the shim, build/run, tests, release flow, known gaps |
-| [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests; its inversion |
+| [overview.md](overview.md) | What the port is, repo home + VPM (1.1.1 released and install-verified 2026-10-26), layout, API, linking, build/run, tests, release flow + state, known gaps |
+| [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests (live since `v1.1.1`); its inversion |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
-| [best-practices.md](best-practices.md) | Method: this repo's § L rules + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
+| [best-practices.md](best-practices.md) | Method: this repo's § L rules (L1–L2) + the workspace's 28 ★ rules, copied verbatim under a dated stamp |

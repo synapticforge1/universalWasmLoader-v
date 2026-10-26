@@ -10,11 +10,12 @@ The hard parts (WIT parsing, Canonical ABI marshalling, `cabi_post` string retur
 live **once** in the C loader; this repo only adds a V-native call surface (a small C shim + a V
 module) on top.
 
-- **Language / runtime:** V (developed against **V 0.5.1**), built on the
+- **Language / runtime:** V (developed against **V 0.5.1**; built and tested on **V 0.5.2 `7647ce1`**
+  since 2026-10-21), built on the
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, v1.1.0 as of 2026-10-21, MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26 — see "Release / publish flow", MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
@@ -53,9 +54,9 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   depends on repo secrets or Actions surviving the transfer. `release.ts` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
-## Current state — IMPLEMENTED v1 (2026-06-19)
+## Current state (re-read 2026-10-26; v1 implemented 2026-06-19)
 
-Working tree:
+Working tree (39 tracked files, 2026-10-26):
 
 - `uwl/uwl.v` — the binding (`module uwl`; public API + `#flag` compile/link directives + the
   `C.uwlv_*` FFI declarations). Marshals V `Arg` values into a flat `C.uwlv_arg` array and reads
@@ -69,7 +70,8 @@ Working tree:
   wasmtime headers.
 - `uwl/universal_wasm_loader.h` — **vendored copy** of the upstream C single-header loader (keeps its
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
-  release being targeted.
+  release being targeted. **Measured 2026-10-26:** byte-identical (`cmp`) to loader-c's
+  `universal_wasm_loader.h` at its `v1.1.1` (SPEC v3.0.0), and to loader-zig's copy.
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`); it loads
   `tests/math_50.wasm`. (Its own older `examples/math_50.{wasm,wit}` — wasm bytes not the stamped
   set — were removed 2026-10-26.)
@@ -79,6 +81,10 @@ Working tree:
   "How it links"). A build tool, not a script (INDEX Policy).
 - `scripts/bump-version.ts` / `release.ts` / `publish.ts` (+ `_lib.ts` helpers) — the release
   toolchain (see "Release / publish flow"). TypeScript on Bun, one form each (INDEX Policy).
+- `scripts/test.ts` (the suite runner), `scripts/surface.ts` + committed `api-surface.txt`,
+  `scripts/compat.ts` — the compatibility gate ([compat-gate.md](compat-gate.md)).
+- `.gitattributes` — LF pinned wildcard-first; the `.wit` / `.wat` / `.json` fixtures feed the
+  sha256 stamp (a clone with `core.autocrlf=true` broke 6 of 12 before it, 0 after; 2026-10-26).
 - `vendor/` — wasmtime C API SDK (headers + `libwasmtime.dll.a` + `wasmtime.dll`). **gitignored**;
   fetched on demand. `wasmtime.dll` is also staged at the repo root for `v run` (gitignored).
 - `LICENSE` — MIT (Copyright (c) 2026 Jon Marcum), identical text to the `-c` port. README License
@@ -88,7 +94,8 @@ Working tree:
   tracked text).
 
 Build environment used for v1: V 0.5.1 + Zig 0.16.0 (as the C compiler) + wasmtime C API **v45.0.2**
-`x86_64-mingw`.
+`x86_64-mingw`. Since 2026-10-21: V 0.5.2 `7647ce1`, same Zig and SDK; scripts on Bun (1.4.4 on
+2026-10-26).
 
 ## Documentation conventions (added 2026-06-19)
 
@@ -290,11 +297,16 @@ is patch (public surface unchanged, 16 symbols, SPEC 3.0.0; `uwl/` differs from 
 comment). Contents since `v1.1.0`: scripts ported to Bun with the compatibility gate; the V test
 suite over the stamped fixtures; `.gitattributes`; the example loads `tests/math_50.wasm`; README
 fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut with
-`bump-version.ts patch` → `release.ts` on `main` after a `--no-ff` merge; the GitHub Release page
-is skipped (`gh` not logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
-The tag id is recorded in the workspace ledger, not here (it does not exist when this is written).
-**Done 2026-10-26:** tag `v1.1.1` → `f5c964d`, on GitHub; published on VPM (owner), verified by an
-install (see "Repository home").
+`bump-version.ts patch` (on `release/1.1.1`) → `--no-ff` merge `f5c964d` → `release.ts` on
+`main`, which ran the example, the suite (42/42) and `compat.ts --release` (patch step) before it
+tagged. **Annotated tag `v1.1.1` (`e9594a3`) → `f5c964d`, pushed with `main`, read back with
+`ls-remote`;** `publish.ts` found the tag locally and on `origin`; published on VPM (owner),
+verified by an install (see "Repository home"). The GitHub Release page was skipped (`gh` not
+logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
+
+**Release state (2026-10-26):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`;
+`v1.0.0` exists only locally (never pushed, see below). `v1.1.1` is the first tag that carries
+`tests/`, so from the next bump on, Rule 3 runs its suite against the new source.
 
 **Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
 v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
@@ -320,7 +332,10 @@ checked.
 - **String/aggregate args beyond flat scalars + strings** rely entirely on the C loader; there is no
   V-side validation beyond the `Arg` builder `kind` tags.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream
-  `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release.
+  `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
+  (identical to -c `v1.1.1` on 2026-10-26).
+- **`v fmt -verify uwl/uwl.v` fails on V 0.5.2** (whitespace only; see "Documentation conventions").
+- **No GitHub Release page for `v1.1.1`** (the tag exists) — 🗓️ owner, needs `gh auth login`.
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or
   `--no-build`).

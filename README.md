@@ -9,6 +9,16 @@ returns, version pinning) live **once**, in the C loader. This repo is a thin
 wrapper over it (a small C shim + a V module) — built on the
 [wasmtime C API](https://docs.wasmtime.dev/c-api/).
 
+## Install
+
+```sh
+v install synapticforge1.uwl
+```
+
+The module is published on [VPM](https://vpm.vlang.io), which installs it from
+this repository. It still needs the wasmtime C API SDK and a C compiler that
+can link it; see [Build & run](#build--run).
+
 ## Quick start
 
 ```v
