@@ -14,12 +14,15 @@ wrapper over it (a small C shim + a V module) — built on the
 ```v
 import uwl
 
-m := uwl.import_module('examples/math_50.wasm')!
+m := uwl.import_module('tests/math_50.wasm')!
 defer { m.free() }
 
 sum := m.call_i32('add', uwl.i32(3), uwl.i32(4))!            // 7
 prod := m.call_f64('multiply', uwl.f64(2.5), uwl.f64(4.0))!  // 10.0
-greeting := m.call_str('greet', uwl.text('World'))!          // "Hello, World!"
+
+s := uwl.import_module('tests/strings_50.wasm')!
+defer { s.free() }
+greeting := s.call_str('greet', uwl.text('World'))!          // "Hello, World!"
 ```
 
 Wrap each argument with `uwl.i32` / `i64` / `f32` / `f64` / `boolean` / `text`
@@ -66,6 +69,15 @@ multiply(2.5, 4.0) = 10.0
 square(5) = 25
 ```
 
+## Tests
+
+```sh
+bun scripts/test.ts   # v test over tests/ (builds the zigcc tool on first use)
+```
+
+`tests/` holds the shared reference fixtures, copied unmodified from the
+reference loader and checked against `tests/fixtures.json` by sha256.
+
 ## API
 
 - `uwl.import_module(path string) !Module` — load a module (its `.wit` is
@@ -104,7 +116,10 @@ the wasmtime headers, keeping them out of V's translation unit.
   keep it in sync with the upstream
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
 - Host import callbacks are not yet exposed from V (pure-compute / library
-  modules only).
+  modules only). A module's WIT imports still load: each one returns zero, as
+  in the reference loader.
+- Pick the `call_*` that matches the export's result type: a mismatched call
+  currently returns a zero value (`0`, `0.0`, `false`, `''`) instead of an error.
 - Maintainers: releases use `bun scripts/bump-version.ts <major|minor|patch>`,
   then `bun scripts/release.ts`, then `bun scripts/publish.ts` (each takes `--help`;
   the scripts need [Bun](https://bun.sh)).

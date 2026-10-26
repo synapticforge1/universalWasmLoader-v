@@ -16,7 +16,7 @@ fn adder(m &uwl.Module, a int, b int) !int {
 }
 
 fn main() {
-	m := uwl.import_module('examples/math_50.wasm') or {
+	m := uwl.import_module('tests/math_50.wasm') or {
 		eprintln('load failed: ${err}')
 		return
 	}

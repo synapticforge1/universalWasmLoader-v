@@ -2,7 +2,7 @@
 //
 //   import uwl
 //
-//   m := uwl.import_module('examples/math_50.wasm')!
+//   m := uwl.import_module('tests/math_50.wasm')!
 //   defer { m.free() }
 //   sum := m.call_i32('add', uwl.i32(3), uwl.i32(4))!   // 7
 //

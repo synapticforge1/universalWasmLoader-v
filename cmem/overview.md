@@ -68,8 +68,10 @@ Working tree:
 - `uwl/universal_wasm_loader.h` — **vendored copy** of the upstream C single-header loader (keeps its
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
   release being targeted.
-- `examples/adder.v` — the runnable example (`v run examples/adder.v`). `examples/math_50.wasm` +
-  `math_50.wit` are the reference fixture.
+- `examples/adder.v` — the runnable example (`v run examples/adder.v`); it loads
+  `tests/math_50.wasm`. (Its own older `examples/math_50.{wasm,wit}` — wasm bytes not the stamped
+  set — were removed 2026-10-26.)
+- `tests/` — the V suite `uwl_test.v` + the stamped reference fixtures (see "Tests").
 - `scripts/fetch-wasmtime.ts` — downloads the wasmtime C API SDK into `vendor/` (gitignored).
 - `scripts/zigcc.v` — the Zig-as-C-compiler tool, built to `scripts/zigcc.exe` (gitignored; see
   "How it links"). A build tool, not a script (INDEX Policy).
@@ -94,7 +96,9 @@ comment. Each comment keeps **V's name-prefixed first line** (so `v doc` renders
 mode. The raw `C.uwlv_*` FFI block is grouped under a banner comment describing it as the only
 cross-into-C surface (the V equivalent of a hand-written `.d.ts`), and the `k_*` discriminants and
 struct fields have inline notes. **`v fmt` is authoritative** — the file is kept `v fmt`-clean (run
-`v fmt -w uwl/uwl.v`; `v fmt -verify` passes). `examples/adder.v` follows the same comment style.
+`v fmt -w uwl/uwl.v`; `v fmt -verify` passed on V 0.5.1). **Stale on V 0.5.2 (measured
+2026-10-26):** `v fmt -verify uwl/uwl.v` fails at HEAD — 0.5.2 wraps the `C.uwlv_call(...)` line in
+`invoke` one argument later; whitespace only, not yet re-formatted. `examples/adder.v` follows the same comment style.
 
 ## Public API surface (implemented)
 
@@ -181,6 +185,33 @@ the SDK `lib/`).
   **Re-verified 2026-10-21** after V was reinstalled (**V 0.5.2 `7647ce1`** + Zig 0.16.0, wasmtime
   v45.0.2), through the V `zigcc` tool.
 
+## Tests (added 2026-10-26, workspace letter H7)
+
+`bun scripts/test.ts [DIR]` runs `v -stats test` over `tests/` with the zigcc tool as `-cc` (built on
+first use unless `VFLAGS` already sets `-cc`) and the SDK's `lib/` on `PATH`; the verdict is read
+from V's per-file summary line as well as the exit code (`GREEN: N asserts passed`).
+
+**Fixtures:** the workspace's stamped reference set, copied byte for byte from loader-js `36aa661`
+(`git cat-file blob 36aa661:tests/<f>`; stamp = wasmtk `4a5c3cf668d`, describe `v2.0.3-64-g4a5c3cf`):
+the ten `*_50.{wasm,wit}`, `init_check.{wat,wasm}` and `fixtures.json`. 12/12 sha256 match the
+stamp, and all 13 files are `cmp`-identical to loader-zig's `tests/`. Never regenerate them here
+(loader-dart found `describe` is not reproducible across clones); re-copy from loader-js.
+
+**`tests/uwl_test.v`, 10 tests / 42 asserts (2026-10-26, V 0.5.2, all green):** every fixture's
+sha256 vs `fixtures.json`, both directions (nothing unlisted); `math_50` (7, 10.0, 25); `booleans_50`
+(six bool cases); `strings_50` (`greet`, `shout`, `strLen`); `init_check` → 99 (SPEC §10
+`_initialize`, raw-exports path); `wasi_io_50` → 42 (WASI `fd_write`; prints `doubling` — no hang
+under `v test`, unlike Zig's `--listen=-` runner); `imports_50` without callbacks loads and reads 0
+from both exports; `@9` pin refused; missing file refused; unknown export refused.
+**Inverted** (a scratch copy per mutant; control green): fixture one byte short → stamp, math and
+unknown-export tests red; an unlisted file in `tests/` → stamp test red; bool decode inverted →
+booleans red; call error ignored → unknown-export red; import error ignored → `@9` and
+missing-file red; string result upper-cased → strings red.
+⚠️ **My first expectation was WRONG, kept so it is not "fixed":** I wrote the `imports_50` test as
+"fails to load without host callbacks". It loads: the C loader binds every WIT import and one with no
+callback returns zero (`universal_wasm_loader.h:666-669`), exactly as the JS reference does (`abi.js`
+`if (!cb) return fn.result ? 0 : undefined`). SPEC §4 is silent on a missing callback.
+
 ## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
 
 The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run
@@ -254,8 +285,13 @@ checked.
 
 ## Known gaps / not yet done
 
-- **No test suite.** Unlike `-c` (`spec_tests.c`, 29 assertions), this repo only ships the `adder`
-  example as a smoke test. A `v test` over the SPEC §8 fixtures is not yet authored.
+- **A mismatched `call_*` is SILENT-WRONG (measured 2026-10-26, not fixed).** `Module.invoke`
+  ignores the `out_kind` the shim returns, so `call_str` on an `s32` export returns `''`,
+  `call_i32` on an `f64` export returns `0`, `call_bool` on `add` returns `true`, and an `f64` +
+  `string` passed to an `(s32, s32)` export returns `0` — none an error. loader-zig refuses the
+  result case with `WrongResultType`. Fixing it makes calls that work today fail ("accepting less"
+  = MAJOR under the compatibility gate's Rule 2), so it is the owner's call; README warns users.
+- **Host imports load as zeros** (see "Tests"): without callbacks a WIT import returns 0.
 - **No `call_f32`.** `f32` results are returned through `call_f64` (the C loader widens). A dedicated
   `f32`-typed accessor is not surfaced.
 - **Host import callbacks** are not exposed from V — `uwlv_import` passes `NULL, 0` for callbacks.
