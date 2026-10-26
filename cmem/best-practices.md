@@ -6,7 +6,17 @@ number; numbers are never reused.
 
 ## § L This repo's own rules
 
-(none yet)
+- **L1 Invert a gate on the same drive and setup as the checkout it will guard.** Nineteen scratch
+  inversions of the compatibility gate ran clean on C:, and the first real `bump patch --dry-run` in
+  the checkout on D: (editor open) crashed with `EBUSY` deleting `.compat/`, leaving it behind;
+  `rmSync` retries fixed it (2026-10-26, [compat-gate.md](compat-gate.md) § Traps). The scratch
+  clones could not see a hazard that lives in the drive / watcher layer (★ 5.2). Run each new gate
+  once for real in the checkout, before relying on it. [universalWasmLoader-v]
+- **L2 Read the reference implementation before writing a test's expected value.** The first
+  `imports_50` test expected "fails to load without host callbacks"; the C header and the JS
+  reference both bind every WIT import and return zero for a missing callback, so the test was wrong,
+  not the code (2026-10-26, [overview.md](overview.md) § Tests; workspace divergence S9). A failing
+  new test is first a claim about the expectation (★ 3.10). [universalWasmLoader-v]
 
 ## ★ The workspace's convergent rules — a COPY, stamped 2026-10-26 (workspace letters H6, H24, H27, C8)
 
