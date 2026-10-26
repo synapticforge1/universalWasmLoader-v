@@ -19,7 +19,7 @@ module) on top.
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
   **`synapticforge1.uwl`** since 2026-10-22, installed via `v install synapticforge1.uwl`; the
-  original `jrmarcum.uwl` listing still exists, see "Repository home"). The V module is correspondingly `module uwl`
+  original `jrmarcum.uwl` listing is gone since, see "Repository home"). The V module is correspondingly `module uwl`
   in the `uwl/` directory and imported as `import uwl` — matching how the `-zig` sibling exposes its
   importable module as `uwl` even though its package name is longer.
 
@@ -35,11 +35,13 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
 - **VPM: now `synapticforge1.uwl` (owner registered it 2026-10-22).** VPM prefixes the package name
   with the **repo's GitHub owner**, not the registering user. Proof: the new listing is id 771, name
   `synapticforge1.uwl`, url `https://github.com/synapticforge1/universalWasmLoader-v.git`, and its
-  author is still `jrmarcum`. The install command is `v install synapticforge1.uwl`. The original
-  listing **`jrmarcum.uwl` (id 721) still exists** with the old `jrmarcum/...` url, which resolves
-  only through GitHub's redirect (VPM API checked 2026-10-22). Retiring it is the owner's call. The
-  new listing's description shows `â` where an em dash was pasted (an encoding glitch on VPM's side
-  or in the paste), so it is worth re-typing as `-` if VPM allows editing.
+  author is still `jrmarcum`. The install command is `v install synapticforge1.uwl`.
+  **Re-checked 2026-10-26 (VPM API + a real install):** the original listing `jrmarcum.uwl` (id 721)
+  is GONE (`/api/packages/jrmarcum.uwl` → `"404"`; on 2026-10-22 it still existed); the
+  `synapticforge1.uwl` description now shows its em dash correctly (the `â` glitch is gone).
+  **1.1.1 is what users get:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod`
+  version `1.1.1` at `f5c964d` (the `v1.1.1` tag's commit), `tests/` included. VPM's API carries no
+  version field; the install is the check.
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
@@ -291,6 +293,8 @@ fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut wi
 `bump-version.ts patch` → `release.ts` on `main` after a `--no-ff` merge; the GitHub Release page
 is skipped (`gh` not logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
 The tag id is recorded in the workspace ledger, not here (it does not exist when this is written).
+**Done 2026-10-26:** tag `v1.1.1` → `f5c964d`, on GitHub; published on VPM (owner), verified by an
+install (see "Repository home").
 
 **Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
 v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
