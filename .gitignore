@@ -1,6 +1,9 @@
 # wasmtime C API SDK — fetched on demand, not committed
 /vendor/
 
+# the compatibility gate's scratch extraction of a previous tag
+/.compat/
+
 # private memory (machine facts) — never committed
 /cmem/local/
 

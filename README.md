@@ -69,6 +69,16 @@ multiply(2.5, 4.0) = 10.0
 square(5) = 25
 ```
 
+### ⚠️ Breaking Changes
+
+| Version | What changed | How to migrate |
+| ------- | ------------ | -------------- |
+| —       | none since 1.0.0 | — |
+
+Versions follow [Semantic Versioning 2.0.0](https://semver.org): a breaking
+change always comes with a new major version, after at least one minor release
+that marks the old form `@[deprecated]`.
+
 ## Tests
 
 ```sh

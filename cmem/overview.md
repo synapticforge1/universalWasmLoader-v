@@ -240,12 +240,16 @@ as the shell forms (`2` usage, `1` failed guard, a failing child exits with its 
 commands run with argument lists, never through a shell — the TypeScript port keeps all of this.
 Not exercised against GitHub in either port: the `gh release create` path.
 
-1. **`scripts/bump-version.ts` `<major|minor|patch|X.Y.Z>`** — rewrites the `version:` field in
+1. **`scripts/bump-version.ts` `<major|minor|patch>`** — rewrites the `version:` field in
    `v.mod` and commits the isolated bump. Guards: clean tree, strictly-greater target, no pre-existing
-   tag, valid semver. `--dry-run` / `--no-commit`.
+   tag, valid semver, and (since 2026-10-26) the compatibility gate — [compat-gate.md](compat-gate.md):
+   current `api-surface.txt`, a bump not below the floor, the previous tag's tests green for a
+   patch/minor. The explicit `X.Y.Z` form was dropped then (workspace SemVer rule). `--dry-run` /
+   `--no-commit`.
 2. **`scripts/release.ts`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
    `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
-   `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`), tags `v<version>`, pushes branch + tag to
+   `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`) plus `bun scripts/test.ts`, then
+   `bun scripts/compat.ts --release` (also under `--dry-run` / `--no-build`), tags `v<version>`, pushes branch + tag to
    `origin`, and creates the matching **GitHub Release** via `gh` (skippable). Idempotent (reuses a
    tag only if it points at HEAD; skips an existing Release; degrades if `gh` is unauthenticated).
    Does **not** publish to VPM. `--dry-run` / `--no-release` / `--no-build` / `--remote`.

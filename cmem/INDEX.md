@@ -56,6 +56,7 @@ here is filed in `../../../cmem/divergences.md` with a class, in the same sessio
 
 | File | What it holds |
 | --- | --- |
+| [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests; its inversion |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
 | [overview.md](overview.md) | (Scripting rule: see Policy; scripts are TypeScript on Bun since 2026-10-26, proved equivalent to the `.vsh` they replaced.) What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |

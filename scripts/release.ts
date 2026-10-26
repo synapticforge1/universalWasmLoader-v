@@ -20,7 +20,8 @@ Cut a release of universalWasmLoader-v (version from v.mod).
 Usage: bun scripts/release.ts [options]
   --notes <text>   Release notes body (default: a generic line).
   --no-release     Push the tag only; skip creating a GitHub Release.
-  --no-build       Skip the \`v run examples/adder.v\` verification.
+  --no-build       Skip the \`v run examples/adder.v\` + \`bun scripts/test.ts\`
+                   verification (the compatibility gate still runs).
   --remote <name>  Git remote to push to (default: origin).
   --dry-run        Print what would happen; make no tags/pushes/releases.
   -h, --help       Show this help.
@@ -98,7 +99,13 @@ if (doBuild) {
     console.error("warning: no -cc in VFLAGS and zig not found; trying default compiler.");
     run(dryRun, ["v", "run", "examples/adder.v"]);
   }
+  run(dryRun, ["bun", "scripts/test.ts"]);
 }
+
+// --- Compatibility gate: v.mod version vs the tag before it (Rules 1-3) -----
+// Runs under --dry-run too: it changes nothing, and a release it would block
+// should be known before anything is tagged.
+run(false, ["bun", "scripts/compat.ts", "--release"]);
 
 // --- Tag, push, release -----------------------------------------------------
 if (!tagIsThere) run(dryRun, ["git", "tag", "-a", tag, "-m", `universalWasmLoader-v ${tag}`]);
