@@ -9,7 +9,8 @@ single-topic; this INDEX stays one line per file.
 **The workspace floor applies here in full** (`../../../cmem/working-rules.md`,
 `memory-conventions.md`, `best-practices.md`, `layout-and-packaging.md`); this section only names
 how it lands in this repo. Where the two disagree, this repo's rule governs inside this repo — and
-today none does: every rule below conforms to the floor (checked 2026-10-26).
+today none does: every rule below conforms to the floor (checked 2026-10-26). **Pushing:** the
+owner said "push" on 2026-10-26 for that day's work; each later push still needs the owner's word.
 
 - **`cmem/` is the single home for ALL project memory**; `README.md` is the public, user-facing doc
   (no decision logs or post-mortems). The root `CLAUDE.md` is a gitignored POINTER, never
@@ -28,6 +29,7 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 - **`scripts/zigcc.v` is part of the build, not a script** (floor: "a source file the BUILD compiles
   and runs is part of the build", owner 2026-10-23): V invokes it as its C compiler through
   `-cc <path>`, so it must be an executable; `release.ts` / `test.ts` build it on first use.
+  🔒 Owner confirmed 2026-10-26: "keep the zigcc.v as the build tool".
 - **No committed Bash, Nushell, PowerShell or `.bat`**, no Deno, no host Python. A one-time script
   deleted after use may be anything (it is still written with `Write`); promote it to TypeScript
   before committing it. CI YAML `run:` steps are the one accepted shell (no CI here today).
@@ -46,9 +48,9 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
   `v.mod` version line stays at the released version; a surface re-baseline is its OWN commit; a
   removal is `@[deprecated]` for one minor first, with a README Breaking Changes row.
 - **Docs and memory land in the same commit as the code they describe.**
-- **Branching:** this repo has no rule of its own, so the floor applies — branch → gate →
-  `merge --no-ff` to `main`. (Commits up to 2026-10-26 went straight to `main`; 🗓️ OWNER may pick
-  single-`main` instead, as wasmrt / wazmrt do.)
+- 🔒 **Branching (owner, 2026-10-26): branch → gate → `merge --no-ff` to `main`**, docs included.
+  The gate is trigger 6 below when the branch changes what it covers. (The commits up to `6c9fb98`
+  went straight to `main`, before this rule was recorded.)
 - **Never write into a sibling repo**; verify a sibling from a scratch copy; reports about a sibling
   go to the owner or the workspace ledger.
 
