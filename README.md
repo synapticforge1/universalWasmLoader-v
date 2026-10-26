@@ -30,7 +30,7 @@ so the WIT type is unambiguous, and pick the call by its result type
 ## Build & run
 
 ```sh
-v run scripts/fetch-wasmtime.vsh   # downloads the wasmtime C API SDK into vendor/ (gitignored)
+bun scripts/fetch-wasmtime.ts   # downloads the wasmtime C API SDK into vendor/ (gitignored)
 ```
 
 V's default `tcc` cannot link the wasmtime import library, so pick a C compiler:
@@ -105,8 +105,9 @@ the wasmtime headers, keeping them out of V's translation unit.
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
 - Host import callbacks are not yet exposed from V (pure-compute / library
   modules only).
-- Maintainers: releases use `v run scripts/bump-version.vsh <major|minor|patch>`,
-  then `scripts/release.vsh`, then `scripts/publish.vsh` (each takes `--help`).
+- Maintainers: releases use `bun scripts/bump-version.ts <major|minor|patch>`,
+  then `bun scripts/release.ts`, then `bun scripts/publish.ts` (each takes `--help`;
+  the scripts need [Bun](https://bun.sh)).
 
 ## License
 

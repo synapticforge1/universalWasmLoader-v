@@ -13,18 +13,22 @@ single-topic.
 - **`README` is NOT project memory.** It is the public, user-facing doc. Keep internal decision logs /
   bug post-mortems out of it — those live here in `cmem/`.
 
-### Scripts are V (owner, 2026-10-21; binding on every agent)
-Every script in this repo is written in **V**. This applies the workspace floor
-(`../../cmem/working-rules.md` "Tooling — hard rules" 1: Deno/TypeScript, plus the repo's own
-language for in-tree tools) and picks V as the default here. Anyone building this repo already has V,
-so no extra runtime is needed.
-- **Scripts are V scripts (`.vsh`)** in `scripts/`, run with `v run scripts/<name>.vsh [args]`.
-- **A tool that must be an executable** (for example the `zigcc` wrapper, which V calls through
-  `-cc <path>`) is a small V program built to a binary, not a `.bat`/`.ps1`/`.sh` launcher.
-- **No Bash, Nushell, PowerShell or `.bat` scripts.** All 10 legacy `scripts/*.{sh,nu,ps1,bat}`
-  were ported and deleted on 2026-10-21. Each script has **one** form; no dual forms to keep in parity.
-- Only CI YAML `run:` steps may be shell (there is no CI here today). Ad-hoc probes in the session
-  scratchpad may be `.vsh` or Deno `.ts`.
+### Scripts are TypeScript on Bun (owner, 2026-10-22; workspace letter H15; binding on every agent)
+A committed script kept for repeated use is **TypeScript run by Bun** (`bun scripts/<name>.ts`).
+Workspace Tooling rule 1 (`../../../cmem/working-rules.md`): a script uses the repo language's own
+scripting mechanism unless that mechanism must BUILD AN EXECUTABLE to run it — `v run` and `.vsh`
+compile a native executable, so V falls back to Bun.
+- The four `.vsh` (bump-version, release, publish, fetch-wasmtime) were ported 2026-10-26 and
+  deleted after an output-diff proved each port equivalent ([overview.md](overview.md) § "Release /
+  publish flow"). Shared helpers live in `scripts/_lib.ts` (not a script itself).
+- **A tool that must be an executable** stays a small V program built to a binary: `scripts/zigcc.v`,
+  which V calls through `-cc <path>`, so it cannot be a script (a `.ts` file is not an executable,
+  and a compiled Bun binary would be an executable too). Counted as a BUILD TOOL, not a script, the
+  way the owner ruled wazmrt's `tools/*.zig` (2026-10-23). 🗓️ OWNER: confirm (recorded 2026-10-26).
+- **No Bash, Nushell, PowerShell or `.bat` scripts**, no Deno, no Python. Each script has **one**
+  form. A one-time script deleted after use may be anything, written with `Write`, never a heredoc.
+- History: the shell scripts were ported to `.vsh` on 2026-10-21 under the earlier rule ("Scripts
+  are V"); the owner's 2026-10-22 clarification retired that the next day.
 
 ### The "update the project memory" trigger (binding on every agent)
 When the owner says **"update the project memory"** (or a synonym — "update memory", "record this"),
@@ -54,4 +58,4 @@ here is filed in `../../../cmem/divergences.md` with a class, in the same sessio
 | --- | --- |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
-| [overview.md](overview.md) | (Scripting rule: see Policy "Scripts are V"; all scripts ported to V 2026-10-21.) What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |
+| [overview.md](overview.md) | (Scripting rule: see Policy; scripts are TypeScript on Bun since 2026-10-26, proved equivalent to the `.vsh` they replaced.) What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |

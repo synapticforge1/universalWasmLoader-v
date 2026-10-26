@@ -43,12 +43,12 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
-  `scripts/publish.vsh` says `synapticforge1.uwl`. The only `jrmarcum` strings left outside
+  publish script (then `publish.vsh`, now `publish.ts`) says `synapticforge1.uwl`. The only `jrmarcum` strings left outside
   `cmem/` are the JSR scope `@jrmarcum/universal-wasm-loader` in the vendored header, which is
   correct. (The owner removed the README's JSR sentence on GitHub in `61cb1e9`, 2026-10-21.)
 - **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
   (`release` uses the local `gh`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
-  depends on repo secrets or Actions surviving the transfer. `release.vsh` pushes to `origin`, so
+  depends on repo secrets or Actions surviving the transfer. `release.ts` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
 ## Current state — IMPLEMENTED v1 (2026-06-19)
@@ -70,11 +70,11 @@ Working tree:
   release being targeted.
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`). `examples/math_50.wasm` +
   `math_50.wit` are the reference fixture.
-- `scripts/fetch-wasmtime.vsh` — downloads the wasmtime C API SDK into `vendor/` (gitignored).
+- `scripts/fetch-wasmtime.ts` — downloads the wasmtime C API SDK into `vendor/` (gitignored).
 - `scripts/zigcc.v` — the Zig-as-C-compiler tool, built to `scripts/zigcc.exe` (gitignored; see
-  "How it links").
-- `scripts/bump-version.vsh` / `release.vsh` / `publish.vsh` — the release toolchain (see
-  "Release / publish flow"). All scripts are V, one form each (Policy "Scripts are V" in `INDEX.md`).
+  "How it links"). A build tool, not a script (INDEX Policy).
+- `scripts/bump-version.ts` / `release.ts` / `publish.ts` (+ `_lib.ts` helpers) — the release
+  toolchain (see "Release / publish flow"). TypeScript on Bun, one form each (INDEX Policy).
 - `vendor/` — wasmtime C API SDK (headers + `libwasmtime.dll.a` + `wasmtime.dll`). **gitignored**;
   fetched on demand. `wasmtime.dll` is also staged at the repo root for `v run` (gitignored).
 - `LICENSE` — MIT (Copyright (c) 2026 Jon Marcum), identical text to the `-c` port. README License
@@ -142,7 +142,7 @@ userenv ntdll ole32 Shlwapi advapi32 kernel32 uuid`).
 Two compiler paths (README "Requirements & notes"):
 
 - **Zig as the C compiler (recommended)** — `scripts/zigcc.v`, a small V program built once with
-  V's default compiler (`v -o scripts/zigcc.exe scripts/zigcc.v`; `release.vsh` builds it on first
+  V's default compiler (`v -o scripts/zigcc.exe scripts/zigcc.v`; `release.ts` builds it on first
   use). It runs `zig cc -target x86_64-windows-gnu`, copies each `@*.rsp` response file to
   `*.zig.rsp` without V's hardcoded MSVC-form `-Wl,-stack=<n>` (which Zig's bundled `lld` rejects),
   drops that flag from direct arguments too, and passes everything else through `os.Process`, which
@@ -160,12 +160,11 @@ the SDK `lib/`).
 
 ## Build / run flow
 
-- `v run scripts/fetch-wasmtime.vsh [VERSION] [PLATFORM]` — fetch the wasmtime C API SDK into
-  `vendor/` (pure V: `net.http` download with 3 attempts + `compress.szip` extract; defaults
-  `45.0.2` / `x86_64-mingw`). **Windows SDKs only** (`*-mingw`, `*-windows`): wasmtime ships the
-  Linux/macOS C API as `.tar.xz`, which the old `.sh` (`unzip`) could not unpack either; the script
-  now refuses those platforms up front. Note `szip.extract_zip_to_dir` returns `false` on failure
-  rather than an error, so the script checks the result.
+- `bun scripts/fetch-wasmtime.ts [VERSION] [PLATFORM]` — fetch the wasmtime C API SDK into
+  `vendor/` (Bun only: `fetch()` with 3 attempts + an in-process zip extractor, stored + deflate;
+  defaults `45.0.2` / `x86_64-mingw`). **Windows SDKs only** (`*-mingw`, `*-windows`): wasmtime
+  ships the Linux/macOS C API as `.tar.xz`; the script refuses those platforms up front. It keeps no
+  `.zip` on disk (the `.vsh` downloaded to `vendor/<name>.zip` and removed it after).
 - Run the example (Zig-cc path, from the repo root):
   ```sh
   v -o scripts/zigcc.exe scripts/zigcc.v            # once
@@ -182,36 +181,44 @@ the SDK `lib/`).
   **Re-verified 2026-10-21** after V was reinstalled (**V 0.5.2 `7647ce1`** + Zig 0.16.0, wasmtime
   v45.0.2), through the V `zigcc` tool.
 
-## Release / publish flow (AUTHORED 2026-06-19; ported to V 2026-10-21)
+## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
 
-The version in `v.mod` (the `version:` field) is the **single source of truth**. Three V scripts, run
-in order (`v run scripts/<name>.vsh`, each takes `--help`), keep the git tag, GitHub Release, and VPM
+The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run
+in order (`bun scripts/<name>.ts`, each takes `--help`), keep the git tag, GitHub Release, and VPM
 listing consistent with it.
 
-**Port to V (2026-10-21).** The Bash `.sh` and Nushell `.nu` pairs were replaced by one `.vsh` each,
-and all 10 old script files were deleted. The ports keep the same flags, guards, messages and exit
-codes (`2` for usage errors, `1` for failed guards; a failing child command exits with its code).
-They run external commands through `os.Process` with argument lists, never through a shell. Only
-deliberate differences: a missing value for `--notes`/`--remote` is a clear `exit 2`, and the
-`+ command` echo is flushed before each child runs so piped logs stay in order.
-**Verified end to end** in a throwaway clone with a local bare remote: a real `bump-version patch`
-commit, `release --no-release` (built `zigcc.exe` from scratch, ran the example, tagged, pushed
-branch + tag), `publish` (tag found locally and on the remote), a re-run of `release` (reused the
-tag), and the "tag already exists" and dirty-tree guards. Not exercised against GitHub: the
-`gh release create` path (identical logic to the `.sh`).
-V script-mode gotcha: in a `.vsh`, all `fn` definitions must come **before** the first top-level
-statement.
+**Port to Bun (2026-10-26, workspace letter H15).** The four `.vsh` were ported to TypeScript and
+deleted only after an output-diff proved each port equivalent: a one-time harness ran the `.vsh` and
+the `.ts` on the same inputs, each in a fresh throwaway clone at the same path with a local bare
+remote, and compared exit code, stdout, stderr and the resulting state (`v.mod`, last 3 commit
+subjects, `git status`, local tags, the bare remote's refs; for fetch, every extracted file's
+sha256). **42 cases, 42 identical**: bump 16 (help, usage errors, explicit X.Y.Z, not-greater, dry
+runs, a real commit, `--no-commit`, dirty tree, existing tag, bad current version), release 11
+(usage errors, dirty, tag not at HEAD, dry runs with and without `-cc` in `VFLAGS`, a real tag +
+push, tag reuse, unknown remote, a real build that compiled `zigcc.exe` and ran the example),
+publish 12 (every guard, `--dry-run` downgrades, `--skip-tag-check`, unknown remote), fetch 3
+(unsupported platform, already present, a real download: both trees sha256-identical).
+Normalized before comparing: `v run scripts/X.vsh` ↔ `bun scripts/X.ts` in messages, and commit /
+tag ids that the setup commits' timestamps change. **Inverted:** one exit code changed in a scratch
+copy of the bump port → exactly the 2 cases that reach it reported DIFF.
+⚠️ Found on the way: under a ~200-character base path the `.vsh` fetch failed (`cannot extract
+…zip`, exit 1) after writing part of the tree, where the port extracted everything; at a short base
+the two agree. Windows' 260-character path limit in V's `szip` is the suspected layer — UNVERIFIED.
+The 2026-10-21 V port's own record (kept as history): same flags, guards, messages and exit codes
+as the shell forms (`2` usage, `1` failed guard, a failing child exits with its code); external
+commands run with argument lists, never through a shell — the TypeScript port keeps all of this.
+Not exercised against GitHub in either port: the `gh release create` path.
 
-1. **`scripts/bump-version.vsh` `<major|minor|patch|X.Y.Z>`** — rewrites the `version:` field in
+1. **`scripts/bump-version.ts` `<major|minor|patch|X.Y.Z>`** — rewrites the `version:` field in
    `v.mod` and commits the isolated bump. Guards: clean tree, strictly-greater target, no pre-existing
    tag, valid semver. `--dry-run` / `--no-commit`.
-2. **`scripts/release.vsh`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
+2. **`scripts/release.ts`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
    `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
    `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`), tags `v<version>`, pushes branch + tag to
    `origin`, and creates the matching **GitHub Release** via `gh` (skippable). Idempotent (reuses a
    tag only if it points at HEAD; skips an existing Release; degrades if `gh` is unauthenticated).
    Does **not** publish to VPM. `--dry-run` / `--no-release` / `--no-build` / `--remote`.
-3. **`scripts/publish.vsh`** — the deliberate VPM step, decoupled from `release`. **VPM has no
+3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
    https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
    synapticforge1.uwl` clones the repo and `v update` pulls new commits. So this script is
