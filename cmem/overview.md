@@ -283,6 +283,15 @@ GitHub Release via `release`, and register the repo once at https://vpm.vlang.io
 otherwise a no-op). The tag is what a tag/repo-resolving
 registry (VPM, like Go) uses; there is no separate package upload for this ecosystem.
 
+**Release 1.1.1 (2026-10-26, owner: "yes" to cutting it) — a PATCH:** the gate's floor vs `v1.1.0`
+is patch (public surface unchanged, 16 symbols, SPEC 3.0.0; `uwl/` differs from `v1.1.0` by one doc
+comment). Contents since `v1.1.0`: scripts ported to Bun with the compatibility gate; the V test
+suite over the stamped fixtures; `.gitattributes`; the example loads `tests/math_50.wasm`; README
+fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut with
+`bump-version.ts patch` → `release.ts` on `main` after a `--no-ff` merge; the GitHub Release page
+is skipped (`gh` not logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
+The tag id is recorded in the workspace ledger, not here (it does not exist when this is written).
+
 **Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
 v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
 `origin/main`. The `v1.0.0` tag exists **only locally** and was never pushed. The VPM package was
