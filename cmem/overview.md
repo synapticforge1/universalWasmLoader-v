@@ -297,7 +297,9 @@ checked.
   `string` passed to an `(s32, s32)` export returns `0` — none an error. loader-zig refuses the
   result case with `WrongResultType`. Fixing it makes calls that work today fail ("accepting less"
   = MAJOR under the compatibility gate's Rule 2), so it is the owner's call; README warns users.
-- **Host imports load as zeros** (see "Tests"): without callbacks a WIT import returns 0.
+  Filed as workspace divergence **S8** (2026-10-26).
+- **Host imports load as zeros** (see "Tests"): without callbacks a WIT import returns 0 — the C
+  header's and the JS reference's shared behaviour; workspace divergence **S9**.
 - **No `call_f32`.** `f32` results are returned through `call_f64` (the C loader widens). A dedicated
   `f32`-typed accessor is not surfaced.
 - **Host import callbacks** are not exposed from V — `uwlv_import` passes `NULL, 0` for callbacks.
