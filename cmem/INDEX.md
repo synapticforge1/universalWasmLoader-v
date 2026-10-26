@@ -2,61 +2,89 @@
 
 This folder is the **authoritative, portable project memory** for `universalWasmLoader-v`. It lives
 inside the project tree, so it travels with the repo and is committed to git. Keep files small and
-single-topic.
+single-topic; this INDEX stays one line per file.
 
 ## Policy
 
-- **`cmem/` is the single home for ALL project memory.** When the owner says "**update the project
-  memory**," update the matching `cmem/` topic file with the latest decisions, found bugs, design
-  changes, and current state — then add/refresh its one-line pointer in the table below. Convert
-  relative dates to absolute; update existing entries rather than duplicating.
-- **`README` is NOT project memory.** It is the public, user-facing doc. Keep internal decision logs /
-  bug post-mortems out of it — those live here in `cmem/`.
+**The workspace floor applies here in full** (`../../../cmem/working-rules.md`,
+`memory-conventions.md`, `best-practices.md`, `layout-and-packaging.md`); this section only names
+how it lands in this repo. Where the two disagree, this repo's rule governs inside this repo — and
+today none does: every rule below conforms to the floor (checked 2026-10-26).
 
-### Scripts are TypeScript on Bun (owner, 2026-10-22; workspace letter H15; binding on every agent)
-A committed script kept for repeated use is **TypeScript run by Bun** (`bun scripts/<name>.ts`).
-Workspace Tooling rule 1 (`../../../cmem/working-rules.md`): a script uses the repo language's own
-scripting mechanism unless that mechanism must BUILD AN EXECUTABLE to run it — `v run` and `.vsh`
-compile a native executable, so V falls back to Bun.
-- The four `.vsh` (bump-version, release, publish, fetch-wasmtime) were ported 2026-10-26 and
-  deleted after an output-diff proved each port equivalent ([overview.md](overview.md) § "Release /
-  publish flow"). Shared helpers live in `scripts/_lib.ts` (not a script itself).
-- **A tool that must be an executable** stays a small V program built to a binary: `scripts/zigcc.v`,
-  which V calls through `-cc <path>`, so it cannot be a script (a `.ts` file is not an executable,
-  and a compiled Bun binary would be an executable too). Counted as a BUILD TOOL, not a script, the
-  way the owner ruled wazmrt's `tools/*.zig` (2026-10-23). 🗓️ OWNER: confirm (recorded 2026-10-26).
-- **No Bash, Nushell, PowerShell or `.bat` scripts**, no Deno, no Python. Each script has **one**
-  form. A one-time script deleted after use may be anything, written with `Write`, never a heredoc.
-- History: the shell scripts were ported to `.vsh` on 2026-10-21 under the earlier rule ("Scripts
-  are V"); the owner's 2026-10-22 clarification retired that the next day.
+- **`cmem/` is the single home for ALL project memory**; `README.md` is the public, user-facing doc
+  (no decision logs or post-mortems). The root `CLAUDE.md` is a gitignored POINTER, never
+  authoritative (memory-conventions "The two layers"; untracked 2026-10-26, as loader-dotnet did).
+  Private machine facts go in the gitignored `cmem/local/`. Never run a formatter on `cmem/`.
+- **Privacy:** [working-rules.md](working-rules.md) (path test, binary-inclusive scans, the
+  maintainer-email exception). Scan before every commit.
 
-### The "update the project memory" trigger (binding on every agent)
-When the owner says **"update the project memory"** (or a synonym — "update memory", "record this"),
-do BOTH: (1) revise all relevant `cmem/` files and refresh the Files-table pointers (absolute dates;
-update, don't duplicate); and (2) sync the user-facing README only where the change is user-relevant —
-never copy internal decision logs into it.
+### Scripts are TypeScript on Bun (owner, 2026-10-22; workspace Tooling rule 1, letter H15)
+A committed script kept for repeated use is **TypeScript run by Bun** (`bun scripts/<name>.ts`):
+`v run` / `.vsh` compile a native executable, so V falls back to Bun (the floor's per-language
+table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
+- The four `.vsh` were ported 2026-10-26 and deleted after an output-diff proved each port
+  equivalent ([overview.md](overview.md) § "Release / publish flow"). `scripts/_lib.ts` holds
+  shared helpers (not a script itself).
+- **`scripts/zigcc.v` is part of the build, not a script** (floor: "a source file the BUILD compiles
+  and runs is part of the build", owner 2026-10-23): V invokes it as its C compiler through
+  `-cc <path>`, so it must be an executable; `release.ts` / `test.ts` build it on first use.
+- **No committed Bash, Nushell, PowerShell or `.bat`**, no Deno, no host Python. A one-time script
+  deleted after use may be anything (it is still written with `Write`); promote it to TypeScript
+  before committing it. CI YAML `run:` steps are the one accepted shell (no CI here today).
 
-### The "look for code issues" trigger (binding on every agent)
-When the owner says **"look for code issues"** (or "code audit" / "audit the code"), perform a
-comprehensive audit of the V binding (`uwl/uwl.v`) and its C-link glue
-(`uwl/uwl_shim.c`, `uwl_shim.h`, the `#flag` link lines in `uwl.v`) for: (1)
-workarounds / temporary hacks; (2) dead code; (3) bugs (wrong `kind` discriminant in the `Arg`
-builders or the shim `switch`, leaked C-owned strings, missing `uwlv_free_str`/`uwl_val_free`, missing
-`nil` checks on `&char`/handle returns, unsafe pointer lifetimes across the FFI boundary); and (4)
-silent fall-throughs (returning a default kind instead of erroring). Report `file:line` + severity, fix
-the safe ones, and confirm the example still prints the expected adder output (see `overview.md` for
-the exact build command and output).
+### Workspace hard rules, as they bite here (`../../../cmem/working-rules.md`)
+- **No heredocs, ever**: file content goes through `Write` / `Edit`; commit messages through
+  `git commit -F <file>`; never `bun -e`, never a double-quoted `-m`. The dedicated `Grep` / `Read`
+  / `Edit` tools outrank a session instruction to prefer Bash — say so when they conflict.
+- **When the exit code IS the measurement, do not pipe** it; redirect, then read `exit=$?`.
+- **Line endings are LF, pinned in `.gitattributes`** wildcard-first (since 2026-10-26); the `.wit`
+  / `.wat` / `.json` fixtures feed a sha256 stamp. Never "fix" endings with `git config`.
+- **Nothing is pushed, tagged or published unless the owner says so.** `release.ts` pushes and tags;
+  `publish.ts` is a no-op for VPM.
+- **Versions are SemVer 2.0.0 and a bump is gated, never judged**: `bump-version.ts` takes
+  `patch|minor|major` only and runs the compatibility gate ([compat-gate.md](compat-gate.md)). The
+  `v.mod` version line stays at the released version; a surface re-baseline is its OWN commit; a
+  removal is `@[deprecated]` for one minor first, with a README Breaking Changes row.
+- **Docs and memory land in the same commit as the code they describe.**
+- **Branching:** this repo has no rule of its own, so the floor applies — branch → gate →
+  `merge --no-ff` to `main`. (Commits up to 2026-10-26 went straight to `main`; 🗓️ OWNER may pick
+  single-`main` instead, as wasmrt / wazmrt do.)
+- **Never write into a sibling repo**; verify a sibling from a scratch copy; reports about a sibling
+  go to the owner or the workspace ledger.
 
-### Workspace triggers (binding here; full text `../../../cmem/INDEX.md` § Triggers)
-**Correspondence before new work** — read `../../../cmem/workspace-correspondence.md` for open rows
-addressed to this repo or touching the change, first. **Divergence** — a cross-repo difference found
-here is filed in `../../../cmem/divergences.md` with a class, in the same session.
+## Triggers (binding on every agent; workspace § Triggers, `../../../cmem/INDEX.md`)
+
+1. **"update the project memory"** (or "update memory", "record this") — revise the matching
+   `cmem/` topic file, refresh its pointer below, absolute dates, update rather than duplicate.
+   Then AUDIT: grep the old values across `cmem/`, `README.md` and `CLAUDE.md`; when two disagree,
+   measure. Sync `README.md` only where the change is user-relevant. Cross-repo lessons also go to
+   the workspace.
+2. **"look for code issues"** (or "code audit") — audit tested AND untested paths of `uwl/uwl.v` and
+   its C-link glue (`uwl/uwl_shim.{c,h}`, the `#flag` lines) for: workarounds; dead code
+   (grep-verified); bugs (a wrong `kind` discriminant in the `Arg` builders or the shim `switch`,
+   leaked C-owned strings, a missing `uwlv_free_str` / `uwl_val_free`, missing `nil` checks on
+   `&char` / handle returns, pointer lifetimes across the FFI); and silent fall-throughs, the worst
+   class (a known one: a mismatched `call_*` returns a zero value — overview § Known gaps). Report
+   `file:line` + severity, fix the safe ones, run the regression gate, diff OUTPUT not exit codes.
+3. **"coordinate"** — the sibling contract protocol (workspace `contracts.md`): read first, verify by
+   running, record in your own memory, never write the sibling's tree.
+4. **"reconcile"** / 5. **"divergence"** — a cross-repo difference found here is filed in
+   `../../../cmem/divergences.md` with a class, in the same session.
+6. **Regression gate** — a CHANGE to `uwl/`, `tests/`, `examples/` or a gate script
+   (`scripts/{test,surface,compat}.ts`) runs, on the COMMITTED tree after the last edit, reading every
+   exit code AND output: `bun scripts/test.ts` (`GREEN: N asserts passed`), the example
+   (`v -cc <zigcc> run examples/adder.v` → the three adder lines), `bun scripts/surface.ts --check`.
+   A batch with none of those changes does not.
+7. **Correspondence before new work** — read `../../../cmem/workspace-correspondence.md` for every
+   open row addressed to this repo or touching the change, first; handle or record a conflict before
+   starting. Answer a row by writing the commit into its "full text" cell; only the row's creator
+   closes it.
 
 ## Files
 
 | File | What it holds |
 | --- | --- |
+| [overview.md](overview.md) | What the port is, repo home + VPM name, API surface, linking via the shim, build/run, tests, release flow, known gaps |
 | [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests; its inversion |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
-| [overview.md](overview.md) | (Scripting rule: see Policy; scripts are TypeScript on Bun since 2026-10-26, proved equivalent to the `.vsh` they replaced.) What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |

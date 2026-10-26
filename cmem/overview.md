@@ -81,7 +81,9 @@ Working tree:
   fetched on demand. `wasmtime.dll` is also staged at the repo root for `v run` (gitignored).
 - `LICENSE` — MIT (Copyright (c) 2026 Jon Marcum), identical text to the `-c` port. README License
   section links it; `v.mod` declares `license: 'MIT'`.
-- `CLAUDE.md` + `cmem/` — the auto-loaded pointer banner and this portable project memory.
+- `cmem/` — this portable project memory. The root `CLAUDE.md` pointer is gitignored since
+  2026-10-26 (memory-conventions; it was tracked before — `git show 68e5904:CLAUDE.md` is the last
+  tracked text).
 
 Build environment used for v1: V 0.5.1 + Zig 0.16.0 (as the C compiler) + wasmtime C API **v45.0.2**
 `x86_64-mingw`.

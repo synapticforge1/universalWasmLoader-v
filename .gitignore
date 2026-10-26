@@ -7,6 +7,9 @@
 # private memory (machine facts) — never committed
 /cmem/local/
 
+# the session pointer (memory-conventions: gitignored, never authoritative; memory lives in cmem/)
+/CLAUDE.md
+
 # wasmtime.dll staged for runtime
 /wasmtime.dll
 
