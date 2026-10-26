@@ -43,8 +43,15 @@ silent fall-throughs (returning a default kind instead of erroring). Report `fil
 the safe ones, and confirm the example still prints the expected adder output (see `overview.md` for
 the exact build command and output).
 
+### Workspace triggers (binding here; full text `../../../cmem/INDEX.md` § Triggers)
+**Correspondence before new work** — read `../../../cmem/workspace-correspondence.md` for open rows
+addressed to this repo or touching the change, first. **Divergence** — a cross-repo difference found
+here is filed in `../../../cmem/divergences.md` with a class, in the same session.
+
 ## Files
 
 | File | What it holds |
 | --- | --- |
+| [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
+| [best-practices.md](best-practices.md) | Method: this repo's § L rules + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
 | [overview.md](overview.md) | (Scripting rule: see Policy "Scripts are V"; all scripts ported to V 2026-10-21.) What this V port is, its repo home (moved to the `synapticforge1` org, recorded 2026-10-21; VPM now `synapticforge1.uwl`, old `jrmarcum.uwl` listing still up), its language/runtime, API surface, how it links the C loader + wasmtime via the shim, build/run flow (verified output, re-verified on V 0.5.2 2026-10-21; `zigcc.ps1` raw-command-line fix), the release/publish toolchain, and known gaps |

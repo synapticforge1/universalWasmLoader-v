@@ -1,6 +1,9 @@
 # wasmtime C API SDK — fetched on demand, not committed
 /vendor/
 
+# private memory (machine facts) — never committed
+/cmem/local/
+
 # wasmtime.dll staged for runtime
 /wasmtime.dll
 
