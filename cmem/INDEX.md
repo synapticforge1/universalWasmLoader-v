@@ -43,6 +43,13 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
   / `.wat` / `.json` fixtures feed a sha256 stamp. Never "fix" endings with `git config`.
 - **Nothing is pushed, tagged or published unless the owner says so.** `release.ts` pushes and tags;
   `publish.ts` is a no-op for VPM.
+- 🔒 **Every test passes before ANY push** (owner, 2026-10-26: "we need to make sure that all tests
+  pass before we push"). Immediately before `git push`, on the clean commit being pushed, run the
+  full regression gate (trigger 6) whatever the push contains, docs included: `bun scripts/test.ts`
+  (GREEN), the example (three adder lines), `bun scripts/surface.ts --check`, `bun scripts/compat.ts`.
+  Any red or unread step means no push. (2026-10-26: `1e035b0` was pushed with the gate last run
+  on `98f3c3e` — the later commits were `cmem/` only — and re-run on `1e035b0` right after: all
+  green.)
 - **Versions are SemVer 2.0.0 and a bump is gated, never judged**: `bump-version.ts` takes
   `patch|minor|major` only and runs the compatibility gate ([compat-gate.md](compat-gate.md)). The
   `v.mod` version line stays at the released version; a surface re-baseline is its OWN commit; a
