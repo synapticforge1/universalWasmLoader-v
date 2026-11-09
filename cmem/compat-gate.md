@@ -63,6 +63,14 @@ pre-push gate step is `compat.ts --release` on the BUMPED commit; push only afte
 from a regression. Teaching it the version line (report RED only when the version line's step
 from the last tag is below major) would be a gate change, the owner's call — NOT done.
 
+**2.0.1 (2026-11-09), the first PATCH whose previous tag has a full suite.** Rule 3 did real
+work: it caught a change of error TEXT. Passing wasmtime's multi-line trap text through for a
+callback error turned v2.0.0's two error tests red (82 passed / 2 failed), with the surface unchanged (floor
+patch). The 2.0.0 wording was kept, and v2.0.0's 87 asserts went green on the new code. So the
+gate treats a message a released suite asserts as part of the contract, though no surface line
+names it. Report mode was green before and after the bump, so the push came first (the order the
+owner gave). `compat --release` was a patch step with v2.0.0's tests GREEN.
+
 **Consumers (Rule 3, second half):** none known; wasmtk's H6.5b consumer suites name this repo's
 suite as one to exist.
 

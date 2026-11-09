@@ -56,20 +56,23 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   depends on repo secrets or Actions surviving the transfer. `release.ts` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
-## Current state (re-read 2026-10-26; v1 implemented 2026-06-19)
+## Current state (re-read 2026-11-09; v1 implemented 2026-06-19)
 
-Working tree (39 tracked files, 2026-10-26):
+Working tree (39 tracked files, 2026-10-26; still 39 on 2026-11-09):
 
 - `uwl/uwl.v` — the binding (`module uwl`; public API + `#flag` compile/link directives + the
   `C.uwlv_*` FFI declarations). Marshals V `Arg` values into a flat `C.uwlv_arg` array and reads
   results back through out-params. Every public symbol carries a doc comment (see "Documentation
   conventions" below).
 - `uwl/uwl_shim.c` — the C shim: `#define UWL_IMPLEMENTATION` + includes the loader header to compile
-  its body, and implements the primitive-only `uwlv_*` surface (import/free/call) by marshalling the
-  `uwlv_arg` array into `uwl_val_t` and back.
+  its body, and implements the primitive-only `uwlv_*` surface (`uwlv_import_with` / `uwlv_free` /
+  `uwlv_call`) by marshalling the `uwlv_arg` array into `uwl_val_t` and back. Since 2026-11-08 it
+  also holds the one host-callback trampoline (`uwlv__trampoline` → the V-exported
+  `uwlv_host_dispatch`); since 2026-11-09 a V callback error becomes `uwl_err` (see "Host import
+  callbacks").
 - `uwl/uwl_shim.h` — the self-contained V-facing C header. Deliberately does **not** include
   `universal_wasm_loader.h` or `wasm.h`, so V parses it into its own translation unit without the
-  wasmtime headers.
+  wasmtime headers. It declares `uwlv_host_dispatch`, which V DEFINES (`@[export]`).
 - `uwl/universal_wasm_loader.h` — **vendored copy** of the upstream C single-header loader (keeps its
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
   release being targeted. **Since 2026-11-09: loader-c's `v2.1.0` (SPEC v4.0.0 + `uwl_err` /
