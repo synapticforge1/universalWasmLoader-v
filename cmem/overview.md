@@ -70,8 +70,10 @@ Working tree (39 tracked files, 2026-10-26):
   wasmtime headers.
 - `uwl/universal_wasm_loader.h` — **vendored copy** of the upstream C single-header loader (keeps its
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
-  release being targeted. **Measured 2026-10-26:** byte-identical (`cmp`) to loader-c's
-  `universal_wasm_loader.h` at its `v1.1.1` (SPEC v3.0.0), and to loader-zig's copy.
+  release being targeted. **Since 2026-11-08: loader-c's `v2.0.0` (SPEC v4.0.0), byte for byte**
+  (`git -C ../universalWasmLoader-c show v2.0.0:universal_wasm_loader.h`, sha256 `5ffa482d…`, the
+  hash loader-zig recorded for its copy). Was loader-c `v1.1.1` (SPEC v3.0.0, `f3af6143…`) on
+  2026-10-26. See "SPEC 4.0.0".
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`); it loads
   `tests/math_50.wasm`. (Its own older `examples/math_50.{wasm,wit}` — wasm bytes not the stamped
   set — were removed 2026-10-26.)
@@ -95,13 +97,18 @@ Working tree (39 tracked files, 2026-10-26):
 
 Build environment used for v1: V 0.5.1 + Zig 0.16.0 (as the C compiler) + wasmtime C API **v45.0.2**
 `x86_64-mingw`. Since 2026-10-21: V 0.5.2 `7647ce1`, same Zig and SDK; scripts on Bun (1.4.4 on
-2026-10-26).
+2026-10-26). **Since 2026-11-08: Zig 0.17.1** (the workspace moved; row C37). On it the gate was RED
+at `main` before any change: Zig 0.17's clang makes `-Wincompatible-pointer-types` an error, and
+V 0.5.2's own `builtin` passes `&u32` to `WriteConsoleW`'s `LPDWORD`. `zigcc.v` now passes
+`-Wno-error=incompatible-pointer-types` (a warning again; both types are 32-bit unsigned on
+Windows). `test.ts` / `release.ts` build `zigcc.exe` only when it is MISSING, so delete a stale one.
 
 ## Documentation conventions (added 2026-06-19)
 
 `uwl/uwl.v` is documented for clarity in a way familiar to the TypeScript sibling's contributors:
 every public symbol (the `Module`/`Arg` types, `import_module`, `free`, the six arg builders, and the
-`call_i32/i64/f64/bool/str` family) and the internal helpers (`invoke`, `take_err`) carry a doc
+`call_i32/i64/f32/f64/bool/str/void` family) and the internal helpers (`invoke`, `expect`,
+`kind_name`, `take_err`) carry a doc
 comment. Each comment keeps **V's name-prefixed first line** (so `v doc` renders it) and then adds
 **JSDoc-style `@param` / `@returns` / `@error` notations** for the parameters, result, and failure
 mode. The raw `C.uwlv_*` FFI block is grouped under a banner comment describing it as the only
@@ -109,7 +116,8 @@ cross-into-C surface (the V equivalent of a hand-written `.d.ts`), and the `k_*`
 struct fields have inline notes. **`v fmt` is authoritative** — the file is kept `v fmt`-clean (run
 `v fmt -w uwl/uwl.v`; `v fmt -verify` passed on V 0.5.1). **Stale on V 0.5.2 (measured
 2026-10-26):** `v fmt -verify uwl/uwl.v` fails at HEAD — 0.5.2 wraps the `C.uwlv_call(...)` line in
-`invoke` one argument later; whitespace only, not yet re-formatted. `examples/adder.v` follows the same comment style.
+`invoke` one argument later; whitespace only. **Re-formatted 2026-11-08** (`v fmt -w`; `-verify`
+clean on V 0.5.2 for `uwl/uwl.v`, `tests/uwl_test.v`, `scripts/zigcc.v`). `examples/adder.v` follows the same comment style.
 
 ## Public API surface (implemented)
 
@@ -121,13 +129,19 @@ All in `uwl/uwl.v`. Idiomatic V over the C loader's explicit `uwl_call` core, re
   failure. Wraps `uwlv_import` → `uwl_import(path, NULL, 0, err)`.
 - **`uwl.Module`** — a loaded, ABI-translated module (`handle &C.uwl_module_t`).
 - **`m.free()`** — `uwlv_free` → `uwl_free`; releases the module and all resources it owns.
-- **Typed calls** — pick the call by the export's result type:
+- **Typed calls** — pick the call by the export's result type; since 2026-11-08 (SPEC 4.0.0) any
+  other result kind is an error, `export '<name>' returns <kind>, not <want>` (the C loader's own
+  wording), through the internal `Module.expect`:
   - `m.call_i32(name string, args ...Arg) !int` — export returning `s32`.
   - `m.call_i64(name string, args ...Arg) !i64` — export returning `s64`.
-  - `m.call_f64(name string, args ...Arg) !f64` — export returning `f32` **or** `f64`.
+  - `m.call_f32(name string, args ...Arg) !f32` — export returning `f32` (added 2026-11-08).
+  - `m.call_f64(name string, args ...Arg) !f64` — export returning `f64` (it also widened `f32`
+    before 2026-11-08).
   - `m.call_bool(name string, args ...Arg) !bool` — export returning `bool`.
   - `m.call_str(name string, args ...Arg) !string` — export returning `string` (the C heap string is
     copied into a V string, then freed with `uwlv_free_str`).
+  - `m.call_void(name string, args ...Arg) !` — discards any result, as C's `uwl_call_void`
+    (added 2026-11-08, so a void export stays callable).
 - **Arg builders** — wrap each argument so its WIT type is unambiguous: `uwl.i32`, `uwl.i64`,
   `uwl.f32`, `uwl.f64`, `uwl.boolean`, `uwl.text`. (`Arg` is a tagged struct; only the field matching
   its `kind` is marshalled.)
@@ -144,7 +158,31 @@ to V (`*out_s = out.str; out.str = NULL`), and V frees it with `uwlv_free_str` a
 `k_*` discriminants in `uwl.v` must stay in lockstep with `uwl_kind_t` in the loader header
 (`1=i32 2=i64 3=f32 4=f64 5=bool 6=str`, `0=void`).
 
-**A companion `.wit` is required** (it is the source of per-arg WIT types the loader re-narrows to).
+**A companion `.wit` gives the typed interface**; since the v2.0.0 header the C `uwl_call` checks
+the count and each argument's kind against it (no coercion: `uwl.f64(2.7)` for an `s32` is refused,
+naming the export and the parameter). The `Arg` builder IS the kind, so V cannot send an
+out-of-range `s32` (`uwl.i32` takes a V `int`); 2³¹ needs `uwl.i64`, which is refused by kind.
+Without a `.wit` the exports are raw and the engine checks them.
+
+## SPEC 4.0.0 (2026-11-08, workspace row C29)
+
+Re-aligned to SPEC 4.0.0 (`../universalWasmLoader-js/SPEC.md`, loader-js 2.0.0). Items 1–3 come from
+the vendored C header (loader-c v2.0.0): (1) the `.wit` is read before the `.wasm`; raw only when it
+is absent; any other read failure → `cannot read .wit '<path>': <strerror>`. (2) the strict parser →
+`invalid .wit '<path>': …`; a WIT export the module lacks fails the load. (3) every WIT import needs
+a callback; V passes none, so `imports_50` → `no host callback for WIT imports: envMul (WIT
+"env-mul"), envAdd (WIT "env-add")`. The binding's own part: (4) the kind-specific `call_*` refuse a
+result of another kind (S8), plus `call_f32` / `call_void`. (5) n/a: local files only, no http.
+Rows of § 8 "Refusals" that need a callback (only `envMul`, callback results, async) are n/a here.
+The string-result-import row reports the missing callback (checked first in the C loader) — it
+names `env-mul` before any `.wasm` is read. **Version decision: MAJOR, 2.0.0** (behaviour accepts
+less; the gate floor is major by the SPEC move); bump, push and release are the owner's.
+Commits: `74d61c3` (behaviour + tests + docs), `8f63370` (surface re-baseline alone, 16 → 18).
+**Gate on `8f63370`:** suite GREEN 70/70; example the three adder lines; `surface.ts --check`
+current (18 symbols, SPEC 4.0.0); `compat.ts` floor **major** (`major: SPEC 3.0.0 -> 4.0.0`, two
+`minor: added`) and v1.1.1's own tests on the new code RED 40 / 1 — exactly
+`test_imports_50_without_host_callbacks_reads_zero`, the intended break (Rule 3 binds only a
+patch / minor); `bump major --dry-run` allowed, `bump minor --dry-run` refused (below the floor).
 
 ## How it links
 
@@ -161,7 +199,8 @@ Two compiler paths (README "Requirements & notes"):
   use). It runs `zig cc -target x86_64-windows-gnu`, copies each `@*.rsp` response file to
   `*.zig.rsp` without V's hardcoded MSVC-form `-Wl,-stack=<n>` (which Zig's bundled `lld` rejects),
   drops that flag from direct arguments too, and passes everything else through `os.Process`, which
-  re-quotes each argument with the Windows rules. Use it via `v -cc <path>/zigcc.exe run ...` or
+  re-quotes each argument with the Windows rules. Since 2026-11-08 it adds
+  `-Wno-error=incompatible-pointer-types` (Zig 0.17; see the build environment above). Use it via `v -cc <path>/zigcc.exe run ...` or
   `export VFLAGS="-cc <path>/zigcc.exe"`.
   **History (2026-10-21):** it replaced `zigcc.{bat,ps1,sh}`. The `.bat` → `powershell -File` chain
   broke on V 0.5.2: PowerShell binds an argument like `-I"C:\dir"` as a named parameter `-IC:` and
@@ -219,9 +258,23 @@ unknown-export tests red; an unlisted file in `tests/` → stamp test red; bool 
 booleans red; call error ignored → unknown-export red; import error ignored → `@9` and
 missing-file red; string result upper-cased → strings red.
 ⚠️ **My first expectation was WRONG, kept so it is not "fixed":** I wrote the `imports_50` test as
-"fails to load without host callbacks". It loads: the C loader binds every WIT import and one with no
-callback returns zero (`universal_wasm_loader.h:666-669`), exactly as the JS reference does (`abi.js`
-`if (!cb) return fn.result ? 0 : undefined`). SPEC §4 is silent on a missing callback.
+"fails to load without host callbacks". It loaded: the C loader bound every WIT import and one with no
+callback returned zero (`universal_wasm_loader.h:666-669`), exactly as the JS reference did (`abi.js`
+`if (!cb) return fn.result ? 0 : undefined`). SPEC 3.0.0 §4 was silent on a missing callback.
+**SPEC 4.0.0 made it a refusal (2026-11-08); the test now asserts the refusal.**
+
+**2026-11-08 (SPEC 4.0.0): 16 tests / 70 asserts, all green** (V 0.5.2, Zig 0.17.1). The
+`imports_50` test became "fails naming both" (`envMul`, `envAdd`), and six refusal tests were
+added from SPEC § 8: a string-result import (names `env-mul`, no `.wasm` read); typed-call
+arguments (`add(text, 1)`, `add(2.7, 1)`, `add(1, 2³¹ as s64)`, `add(1)`, `greet(42)`,
+`isEven("4")` — each names the export and the parameter or the count); result-kind mismatch for all
+six accessors (exact messages), `call_void` discards; a `.wit` that does not parse (`a: s32 b: s32`,
+`u32`) names the `.wit` and the fault; a WIT export the module lacks names `cube`; absent `.wit` →
+raw `add(3, 4)` = 7, while a `.wit` that is a directory → `cannot read .wit`. Variant `.wit` files
+sit in a scratch dir in the system temp beside a COPY of the fixture `.wasm`; `tests/` is untouched.
+**Inverted:** the v1.1.1 header under the new suite → 47 passed / 6 failed, exactly the six
+loader-level refusal tests (the result-kind test stays green: it is the binding's); the result-kind
+check disabled → only the result-kind test red. Control: the v1.1.1 header + the old suite → 42/42.
 
 ## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
 
@@ -316,25 +369,21 @@ checked.
 
 ## Known gaps / not yet done
 
-- **A mismatched `call_*` is SILENT-WRONG (measured 2026-10-26, not fixed).** `Module.invoke`
-  ignores the `out_kind` the shim returns, so `call_str` on an `s32` export returns `''`,
-  `call_i32` on an `f64` export returns `0`, `call_bool` on `add` returns `true`, and an `f64` +
-  `string` passed to an `(s32, s32)` export returns `0` — none an error. loader-zig refuses the
-  result case with `WrongResultType`. Fixing it makes calls that work today fail ("accepting less"
-  = MAJOR under the compatibility gate's Rule 2), so it is the owner's call; README warns users.
-  Filed as workspace divergence **S8** (2026-10-26).
-- **Host imports load as zeros** (see "Tests"): without callbacks a WIT import returns 0 — the C
-  header's and the JS reference's shared behaviour; workspace divergence **S9**.
-- **No `call_f32`.** `f32` results are returned through `call_f64` (the C loader widens). A dedicated
-  `f32`-typed accessor is not surfaced.
+- ~~A mismatched `call_*` is SILENT-WRONG~~ — **FIXED 2026-11-08 (SPEC 4.0.0, S8):** measured
+  2026-10-26 (`call_str` on `s32` → `''`, `call_i32` on `f64` → `0`, wrong argument kinds → `0`);
+  now the result kind is checked by `Module.expect` and the arguments by the C loader.
+- ~~Host imports load as zeros~~ — **since 2026-11-08 (SPEC 4.0.0, S9) a module with WIT imports
+  is REFUSED at load**, naming every missing callback.
+- ~~No `call_f32`~~ — added 2026-11-08.
 - **Host import callbacks** are not exposed from V — `uwlv_import` passes `NULL, 0` for callbacks.
-  Pure-compute / library modules work; modules needing host imports are not supported from V.
+  Pure-compute / library modules work; since SPEC 4.0.0 a module with WIT imports cannot be loaded
+  from V at all, so SPEC § 8 `imports_50` (12.0, 17) is not reachable here. Exposing them needs a
+  shim trampoline from `uwl_host_fn_t` to a V function — the next feature, the owner's call.
 - **String/aggregate args beyond flat scalars + strings** rely entirely on the C loader; there is no
   V-side validation beyond the `Arg` builder `kind` tags.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
-  (identical to -c `v1.1.1` on 2026-10-26).
-- **`v fmt -verify uwl/uwl.v` fails on V 0.5.2** (whitespace only; see "Documentation conventions").
+  (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` since 2026-11-08).
 - **No GitHub Release page for `v1.1.1`** (the tag exists) — 🗓️ owner, needs `gh auth login`.
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or

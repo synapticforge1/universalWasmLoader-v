@@ -22,7 +22,10 @@ recorded as parameter TYPES + return type — V has no named arguments, so renam
 no caller and is not surface (inverted: a rename leaves `--check` clean). Structs list their `pub`
 fields only (`Arg` and `Module` have none, so callers can neither build nor read them except through
 the API). A public kind the script cannot key is an error, never skipped. The SPEC version comes
-from the vendored header's leading comment, exactly once. **16 symbols, SPEC 3.0.0, on 2026-10-26.**
+from the vendored header's leading comment, exactly once. **16 symbols, SPEC 3.0.0, on 2026-10-26;
+18 symbols, SPEC 4.0.0, since 2026-11-08** (re-baseline alone: `spec 3.0.0 -> 4.0.0`, added
+`call_f32`, `call_void`; nothing removed or changed — `call_f64`'s stricter result is behaviour,
+not surface).
 Not in the surface: the private `C.uwlv_*` FFI block and the `k_*` discriminants (module-private);
 `uwl_shim.{c,h}`; the C header beyond its SPEC line. A change there that alters behaviour is Rule
 3's to catch.
