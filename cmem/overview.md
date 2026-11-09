@@ -426,7 +426,9 @@ Not exercised against GitHub in either port: the `gh release create` path (remov
      `PATH`, verified by `which`): all three sha256 OK, wasmtime pin OK, suite 89/89, the three adder
      lines, surface current, compat floor patch and v2.0.1's 89 green. ⚠️ The rehearsal caught two
      pins that had lost their last hex digit: `sha256sum` printed a leading `\` (escaped path) and
-     `cut -c1-64` kept it. Re-measured from stdin. **Not yet proven on GitHub:** the first push to
+     `cut -c1-64` kept it. Re-measured from stdin. **Real GitHub, read-only `--dry-run`, no token
+     (2026-11-09):** `v2.0.1` at `03307ac` → the annotated tag peeled, no page → "would POST", exit
+     0; the same tag at 2.0.0's `3cfce9a` → refused, exit 1. **Not yet proven on GitHub:** the first push to
      `main` runs `checks`; the first new tag runs `release`, whose page's `author.login` should be
      `github-actions[bot]` (H32 asks for it in the ledger row).
 3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
