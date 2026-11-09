@@ -113,7 +113,7 @@ square(5) = 25
 
 | Version | What changed | How to migrate |
 | ------- | ------------ | -------------- |
-| _next release_ (2.0.0) | Conforms to SPEC 4.0.0 (the C loader v2.0.0). A `call_*` whose kind does not match the export's result is an error (it returned `0` / `0.0` / `false` / `''`); `call_f64` no longer widens an `f32` result. A module whose `.wit` declares an import fails to load, naming each missing callback (each import used to return zero). A `.wit` that exists but cannot be read, or does not parse (e.g. a `u32` type), fails the load instead of falling back to raw exports. | Use `call_f32` for an `f32` export and `call_void` for a void one; match each `call_*` to the WIT result. Load a module with WIT imports through the new `import_module_with(path, callbacks)`, giving a callback for every import. Fix any `.wit` the loader now names. |
+| 2.0.0   | Conforms to SPEC 4.0.0 (the C loader v2.0.0). A `call_*` whose kind does not match the export's result is an error (it returned `0` / `0.0` / `false` / `''`); `call_f64` no longer widens an `f32` result. A module whose `.wit` declares an import fails to load, naming each missing callback (each import used to return zero). A `.wit` that exists but cannot be read, or does not parse (e.g. a `u32` type), fails the load instead of falling back to raw exports. | Use `call_f32` for an `f32` export and `call_void` for a void one; match each `call_*` to the WIT result. Load a module with WIT imports through the new `import_module_with(path, callbacks)`, giving a callback for every import. Fix any `.wit` the loader now names. |
 
 Versions follow [Semantic Versioning 2.0.0](https://semver.org): a breaking
 change always comes with a new major version, after at least one minor release
