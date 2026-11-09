@@ -5,7 +5,7 @@
 // Typical flow:
 //
 //     bun scripts/bump-version.ts minor   # 1.0.0 -> 1.1.0, commits the bump
-//     bun scripts/release.ts              # tags v1.1.0, pushes, prints the Release page owner item
+//     bun scripts/release.ts              # tags v1.1.0, pushes; CI makes the Release page
 //
 // Refuses to run on a dirty tree (so the bump lands as an isolated commit) and
 // rejects a target that isn't strictly greater than the current version or whose
@@ -148,5 +148,5 @@ if (doCommit) {
 
 console.log(`Done: ${next}`);
 if (doCommit) {
-  console.log(`Next: bun scripts/release.ts   # tags v${next}, pushes, prints the GitHub Release page link (owner item)`);
+  console.log(`Next: bun scripts/release.ts   # tags v${next}, pushes; the tag push makes the GitHub Release page`);
 }

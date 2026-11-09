@@ -34,7 +34,8 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
   🔒 Owner confirmed 2026-10-26: "keep the zigcc.v as the build tool".
 - **No committed Bash, Nushell, PowerShell or `.bat`**, no Deno, no host Python. A one-time script
   deleted after use may be anything (it is still written with `Write`); promote it to TypeScript
-  before committing it. CI YAML `run:` steps are the one accepted shell (no CI here today).
+  before committing it. CI YAML `run:` steps are the one accepted shell (since 2026-11-09:
+  `.github/workflows/release.yml`; its steps only launch tools and `bun scripts/*.ts`).
 
 ### Workspace hard rules, as they bite here (`../../../cmem/working-rules.md`)
 - **No heredocs, ever**: file content goes through `Write` / `Edit`; commit messages through
@@ -47,8 +48,21 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
   `publish.ts` is a no-op for VPM.
 - 🔒 **No `gh`** (owner, 2026-11-08; workspace letter H30, Tooling rule 9): check GitHub with `git`
   itself (`git ls-remote origin`, `git fetch`) and VPM with an install. A GitHub web-UI task (a
-  Release page) is an OWNER item, never "blocked on gh". `release.ts` prints the Release page's
-  pre-filled link as one (since 2026-11-09).
+  Release page) is an OWNER item, never "blocked on gh".
+- 🔒 **Release pages are made by CI, never by hand** (owner, 2026-11-09, workspace H32 / C41: "they
+  both need the CI and release pages, not by hand"; "only new tags will get release pages"):
+  a `v*` tag push runs `.github/workflows/release.yml` — `checks` (the gate, windows-latest), then
+  `release` (`scripts/github-release.ts`, REST API). Old tags (v1.1.0 … v2.0.1) stay without pages.
+- 🔒 **Every Bun-version notation is the latest installed Bun** (owner, 2026-11-09; workspace H31,
+  Tooling rule 10): 1.4.4 today. The pins in `release.yml` (`BUN_VERSION` + the Windows and Linux
+  sha256) move together, from Bun's SHASUMS256.txt, at the session after the owner installs a newer
+  Bun — gate first, never mid-release. Dated measurements stay as measured.
+- **Every network call has its own time limit** (workspace best-practices 7.21): `fetch-wasmtime.ts`
+  per attempt, `github-release.ts` per call, `curl --max-time` in CI.
+- **Never `git stash` on this drive** (2026-11-09): a stash round-trip hit `Permission denied` on a
+  new directory (exFAT lock, best-practices L1), the `&&` chain broke, and the following `git stash
+  drop` dropped the uncommitted work. It was recovered from the unreachable stash commit
+  (`git fsck --no-reflog --unreachable`). Commit to the branch and clone the COMMIT instead.
 - 🔒 **Every test passes before ANY push** (owner, 2026-10-26: "we need to make sure that all tests
   pass before we push"). Immediately before `git push`, on the clean commit being pushed, run the
   full regression gate (trigger 6) whatever the push contains, docs included: `bun scripts/test.ts`
@@ -99,7 +113,7 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.1 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, release flow + state (2.0.1 released and install-verified 2026-11-09), known gaps |
+| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.1 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, release flow + state (2.0.1 released and install-verified 2026-11-09), the CI release workflow (2026-11-09, H32: checks + Release page), known gaps |
 | [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests (live since `v1.1.1`); 2.0.0 (first major: report mode red by design) and 2.0.1 (Rule 3 caught a message change); its inversion |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules (L1–L2) + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
