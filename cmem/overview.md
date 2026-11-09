@@ -126,8 +126,13 @@ All in `uwl/uwl.v`. Idiomatic V over the C loader's explicit `uwl_call` core, re
 
 - **`uwl.import_module(path string) !Module`** — load a `.wasm`; its companion `.wit` is auto-detected,
   a `@N` path suffix pins the version. Returns an error (the C error string, freed after copying) on
-  failure. Wraps `uwlv_import` → `uwl_import(path, NULL, 0, err)`.
-- **`uwl.Module`** — a loaded, ABI-translated module (`handle &C.uwl_module_t`).
+  failure. Since 2026-11-08 it is `import_module_with(path, {})` (no callbacks).
+- **`uwl.import_module_with(path string, callbacks map[string]HostFn) !Module`** (added 2026-11-08,
+  owner: "yes we want to add the host callback feature") — host callbacks keyed by the camelCase WIT
+  import name; wraps `uwlv_import_with` → `uwl_import(path, cbs, n, err)`. See "Host import
+  callbacks" below.
+- **`uwl.Module`** — a loaded, ABI-translated module (`handle &C.uwl_module_t`, plus the private
+  `state &HostState` the callbacks share).
 - **`m.free()`** — `uwlv_free` → `uwl_free`; releases the module and all resources it owns.
 - **Typed calls** — pick the call by the export's result type; since 2026-11-08 (SPEC 4.0.0) any
   other result kind is an error, `export '<name>' returns <kind>, not <want>` (the C loader's own
@@ -164,6 +169,37 @@ naming the export and the parameter). The `Arg` builder IS the kind, so V cannot
 out-of-range `s32` (`uwl.i32` takes a V `int`); 2³¹ needs `uwl.i64`, which is refused by kind.
 Without a `.wit` the exports are raw and the engine checks them.
 
+### Host import callbacks (2026-11-08)
+
+- **API:** `pub type HostFn = fn (args []Arg) !Arg`. A callback reads its arguments with
+  `Arg.as_i32 / as_i64 / as_f32 / as_f64 / as_bool / as_str() !T` (another kind →
+  `argument is <kind>, not <want>`), and returns an `Arg` built with the call builders;
+  `uwl.nothing()` is the void value. The loader checks the kind against the import's WIT result and
+  traps with its own message (`host callback envAdd (WIT import "env-add" -> s32) returned 2.9
+  (f64); expected s32 (uwl_i32)`), which reaches the export's caller as `<export>: trap: …`.
+- **Path across the FFI:** the shim has ONE `uwl_host_fn_t`, `uwlv__trampoline`, registered for
+  every callback with `userdata` = a `&HostSlot` (name, closure, `&HostState`). It converts the
+  decoded `uwl_val_t` args to `uwlv_arg` (strings borrowed) and calls `uwlv_host_dispatch`, a V
+  function exported with `@[export: 'uwlv_host_dispatch']`. That function rebuilds `[]Arg` (strings
+  copied), runs the closure, and writes the result `uwlv_arg`; the shim turns it back into a
+  `uwl_val_t` (a string is copied). The header's prototype has no `const` on `args`: it must match
+  the one V generates (a `const` gave "conflicting types").
+- **Callback errors:** the C API has NO error channel for a callback. On an error, dispatch records
+  `host callback <name> failed: <msg>` (the first per call) in `HostState` and returns -1. The
+  shim then returns `uwl_void()`, which traps an import that has a result. `invoke` clears the state
+  before each call and, if a callback failed, returns ITS message in place of the trap's. ⚠️ **A
+  void import cannot trap through the C API**, so the WASM after it runs on to the end of the export;
+  the error still fails the call (tested). The C side needs a change to fix this: a letter to
+  loader-c (workspace row C39).
+- **Lifetime:** the C loader keeps only raw pointers, which V's GC cannot see, so every `&HostSlot`
+  is rooted in `HostState.slots`, reachable from the `Module`. This is REASONED, not proven by a
+  test: with the rooting removed, the suite (including a `gc_collect()` before the call) still
+  passed, because a conservative collector rarely reuses the memory that soon.
+- **Linker by-product:** a binary that `dllexport`s `uwlv_host_dispatch` makes lld write an import
+  library next to it (`examples/uwl_shim.lib` after `v run`); `*.lib` / `*.exp` are gitignored.
+- **Not covered:** a callback that calls back into the same Module (re-entry would reset
+  `HostState`); a V `panic` in a callback (aborts the process, as any V panic).
+
 ## SPEC 4.0.0 (2026-11-08, workspace row C29)
 
 Re-aligned to SPEC 4.0.0 (`../universalWasmLoader-js/SPEC.md`, loader-js 2.0.0). Items 1–3 come from
@@ -183,6 +219,13 @@ current (18 symbols, SPEC 4.0.0); `compat.ts` floor **major** (`major: SPEC 3.0.
 `minor: added`) and v1.1.1's own tests on the new code RED 40 / 1 — exactly
 `test_imports_50_without_host_callbacks_reads_zero`, the intended break (Rule 3 binds only a
 patch / minor); `bump major --dry-run` allowed, `bump minor --dry-run` refused (below the floor).
+**Update, same day (host callbacks added):** the callback rows are no longer n/a. Only `envMul` →
+`no host callback for WIT import: envAdd (WIT "env-add")`. `envAdd` returning nothing() / 2.9 /
+2³¹ / 17 as s64 / true / "17" → each named, with the callback, the import, `s32` and the value
+(JS's `null` has no V value). Async is n/a: a V callback has a fixed `!Arg` type, so it cannot
+return a future. The string-result-import row now reports its own refusal (`a WIT import returning
+a string is not supported: envMul (WIT "env-mul")`), since both callbacks are given. § 8
+`imports_50`: `scale(3, 4)` = 12.0, `combine(10, 7)` = 17.
 
 ## How it links
 
@@ -275,6 +318,17 @@ sit in a scratch dir in the system temp beside a COPY of the fixture `.wasm`; `t
 **Inverted:** the v1.1.1 header under the new suite → 47 passed / 6 failed, exactly the six
 loader-level refusal tests (the result-kind test stays green: it is the binding's); the result-kind
 check disabled → only the result-kind test red. Control: the v1.1.1 header + the old suite → 42/42.
+
+**2026-11-08, host callbacks: 21 tests / 87 asserts, all green.** Added: § 8 `imports_50` with
+callbacks (12.0, 17; a callback for a name the `.wit` does not import is ignored); only `envMul`;
+six wrong callback result kinds; a callback's error (and a wrong-kind `as_f64` read) reaching the
+export's caller as `host callback envAdd failed: …`, with the next call clean; a void import
+(`ping`) on a hand-assembled 59-byte module written to a scratch dir with its `.wit` (a closure
+records the arguments; a failing callback still fails `run`). The string-result test now passes
+both callbacks and asserts the exact string-result refusal. **Inverted:** callback errors not
+recorded → exactly the two error-propagation tests red; dispatch always reporting `s32` → the
+`imports_50` and wrong-kind tests red (`envMul`'s f64 now traps); slots not rooted → still green
+(see "Host import callbacks", Lifetime).
 
 ## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
 
@@ -375,10 +429,11 @@ checked.
 - ~~Host imports load as zeros~~ — **since 2026-11-08 (SPEC 4.0.0, S9) a module with WIT imports
   is REFUSED at load**, naming every missing callback.
 - ~~No `call_f32`~~ — added 2026-11-08.
-- **Host import callbacks** are not exposed from V — `uwlv_import` passes `NULL, 0` for callbacks.
-  Pure-compute / library modules work; since SPEC 4.0.0 a module with WIT imports cannot be loaded
-  from V at all, so SPEC § 8 `imports_50` (12.0, 17) is not reachable here. Exposing them needs a
-  shim trampoline from `uwl_host_fn_t` to a V function — the next feature, the owner's call.
+- ~~Host import callbacks are not exposed from V~~ — **added 2026-11-08** (`import_module_with`).
+- **A failing callback for a VOID import cannot stop the WASM after it** (the C API has no error
+  channel; "Host import callbacks"). The error still fails the export call. Waits on loader-c
+  (row C39).
+- **GC rooting of the callbacks is untested** (reasoned only; see "Host import callbacks").
 - **String/aggregate args beyond flat scalars + strings** rely entirely on the C loader; there is no
   V-side validation beyond the `Arg` builder `kind` tags.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream

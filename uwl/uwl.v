@@ -7,7 +7,8 @@
 //   sum := m.call_i32('add', uwl.i32(3), uwl.i32(4))!   // 7
 //
 // Values cross the boundary through a tiny C shim (uwl_shim.c); a companion
-// `.wit` next to the `.wasm` is required for typed calls.
+// `.wit` next to the `.wasm` is required for typed calls. A module that imports
+// host functions is loaded with import_module_with(path, callbacks).
 module uwl
 
 #flag -Dstatic_assert=_Static_assert
@@ -65,9 +66,11 @@ mut:
 	s    &char = unsafe { nil } // payload for str (NUL-terminated, borrowed)
 }
 
-// uwlv_import loads a module; on failure returns nil and sets `err` to a heap
-// C string (free it with C.uwlv_free_str).
-fn C.uwlv_import(path &char, err &&char) &C.uwl_module_t
+// uwlv_import_with loads a module with `n` host callbacks: `names[k]` is the
+// camelCase WIT import name, `ctxs[k]` the &HostSlot that host_dispatch gets
+// back. On failure returns nil and sets `err` to a heap C string (free it with
+// C.uwlv_free_str).
+fn C.uwlv_import_with(path &char, names &&char, ctxs &voidptr, n usize, err &&char) &C.uwl_module_t
 
 // uwlv_free releases a module handle and everything it owns.
 fn C.uwlv_free(m &C.uwl_module_t)
@@ -158,36 +161,204 @@ pub fn text(v string) Arg {
 	}
 }
 
+// nothing is the value for a host callback whose WIT import has no result (the
+// loader ignores what such a callback returns; any Arg would do).
+// @returns  a void Arg
+pub fn nothing() Arg {
+	return Arg{
+		kind: k_void
+	}
+}
+
+// want refuses an Arg of another kind (no coercion, SPEC 4.0.0 § 4). (Internal.)
+fn (a Arg) want(k int) ! {
+	if a.kind != k {
+		return error('argument is ${kind_name(a.kind)}, not ${kind_name(k)}')
+	}
+}
+
+// as_i32 reads a host-callback argument of WIT type `s32`.
+// @returns  the value
+// @error    `argument is <kind>, not s32` for any other kind
+pub fn (a Arg) as_i32() !int {
+	a.want(k_i32)!
+	return int(a.i)
+}
+
+// as_i64 reads a host-callback argument of WIT type `s64`.
+// @returns  the value
+// @error    `argument is <kind>, not s64` for any other kind
+pub fn (a Arg) as_i64() !i64 {
+	a.want(k_i64)!
+	return a.i
+}
+
+// as_f32 reads a host-callback argument of WIT type `f32`.
+// @returns  the value
+// @error    `argument is <kind>, not f32` for any other kind
+pub fn (a Arg) as_f32() !f32 {
+	a.want(k_f32)!
+	return f32(a.d)
+}
+
+// as_f64 reads a host-callback argument of WIT type `f64`.
+// @returns  the value
+// @error    `argument is <kind>, not f64` for any other kind
+pub fn (a Arg) as_f64() !f64 {
+	a.want(k_f64)!
+	return a.d
+}
+
+// as_bool reads a host-callback argument of WIT type `bool`.
+// @returns  the value
+// @error    `argument is <kind>, not bool` for any other kind
+pub fn (a Arg) as_bool() !bool {
+	a.want(k_bool)!
+	return a.i != 0
+}
+
+// as_str reads a host-callback argument of WIT type `string` (an owned copy).
+// @returns  the value
+// @error    `argument is <kind>, not string` for any other kind
+pub fn (a Arg) as_str() !string {
+	a.want(k_str)!
+	return a.s
+}
+
+// HostFn is a host callback for one WIT import. It receives the import's
+// arguments decoded by their WIT types (read them with as_i32() …) and returns
+// the result built with the same builders as call arguments: `uwl.i32(…)` for
+// an `s32` result, `uwl.f64(…)` for `f64`, …, and nothing() for an import with
+// no result. The kind must BE the import's result kind — the loader never
+// coerces; another kind fails the export call that reached the import, naming
+// the callback, the import, the type and the value. An error the callback
+// returns fails that export call with `host callback <name> failed: <msg>`.
+pub type HostFn = fn (args []Arg) !Arg
+
+// HostState is what a Module's callbacks share: the slots (kept here so V's
+// GC sees them — the C loader holds only raw pointers) and the first error a
+// callback returned during the current call. (Internal.)
+@[heap]
+struct HostState {
+mut:
+	slots  []&HostSlot
+	failed bool
+	err    string
+}
+
+// HostSlot is one registered callback; its address is the C `userdata`. (Internal.)
+@[heap]
+struct HostSlot {
+	name  string
+	f     HostFn = unsafe { nil }
+	state &HostState
+}
+
+// host_dispatch is called from C (the shim's import trampoline) for every
+// import call: it decodes the arguments, runs the V callback and encodes its
+// value. On a callback error it records the message (the first per call) and
+// returns -1; the shim then returns void, which traps an import that has a
+// result. A void import cannot trap through the C API, so WASM continues — the
+// recorded error still fails the export call when it returns. (Internal.)
+@[export: 'uwlv_host_dispatch']
+fn host_dispatch(ctx voidptr, args &C.uwlv_arg, n usize, mut out C.uwlv_arg) int {
+	slot := unsafe { &HostSlot(ctx) }
+	mut vargs := []Arg{cap: int(n)}
+	for idx in 0 .. int(n) {
+		a := unsafe { args[idx] }
+		vargs << Arg{
+			kind: a.kind
+			i:    a.i
+			d:    a.d
+			s:    if a.kind == k_str && a.s != unsafe { nil } {
+				unsafe { cstring_to_vstring(a.s) }
+			} else {
+				''
+			}
+		}
+	}
+	r := slot.f(vargs) or {
+		mut st := slot.state
+		if !st.failed {
+			st.failed = true
+			st.err = 'host callback ${slot.name} failed: ${err.msg()}'
+		}
+		return -1
+	}
+	out.kind = r.kind
+	out.i = r.i
+	out.d = r.d
+	out.s = if r.kind == k_str { &char(r.s.str) } else { &char(unsafe { nil }) }
+	return 0
+}
+
 // Module is a loaded, ABI-translated WASM module. Obtain one from
-// import_module() and release it with free(); the single field `handle` is the
-// opaque C loader handle and is not meant to be touched directly.
+// import_module() or import_module_with() and release it with free(); its
+// fields (the opaque C loader handle and the callbacks' state) are not meant to
+// be touched directly.
 pub struct Module {
 	handle &C.uwl_module_t
+	state  &HostState
 }
 
 // import_module loads a `.wasm` and ABI-translates it so its exports can be
-// called with native V values.
+// called with native V values. It passes no host callbacks: see
+// import_module_with() for a module whose `.wit` declares imports.
 //
 // The companion `.wit` (same base name, alongside the `.wasm`) is auto-detected
 // and supplies the per-export argument/result types (SPEC 4.0.0 § 2): only an
 // ABSENT `.wit` gives raw exports; a `.wit` that cannot be read or does not
 // parse fails the load, naming it and the fault. A `@N` suffix on `path` pins
-// the module to version N. Host import callbacks are not exposed here, and
-// every WIT import needs one (SPEC § 4), so a module whose `.wit` declares an
-// import fails to load, naming each missing callback: only pure-compute /
-// library modules load.
+// the module to version N. Every WIT import needs a host callback (SPEC § 4),
+// so here a module whose `.wit` declares an import fails to load, naming each.
 //
 // @param path  filesystem path to the `.wasm` (optionally with a `@N` version suffix)
 // @returns     a ready-to-call Module — release it with `m.free()`
 // @error       the underlying loader message if the module fails to load/translate
 pub fn import_module(path string) !Module {
+	return import_module_with(path, map[string]HostFn{})
+}
+
+// import_module_with is import_module() with host callbacks for the module's
+// WIT imports, keyed by the import's camelCase name (WIT `env-mul` → `envMul`):
+//
+//   m := uwl.import_module_with('tests/imports_50.wasm', {
+//       'envMul': fn (a []uwl.Arg) !uwl.Arg { return uwl.f64(a[0].as_f64()! * a[1].as_f64()!) }
+//       'envAdd': fn (a []uwl.Arg) !uwl.Arg { return uwl.i32(a[0].as_i32()! + a[1].as_i32()!) }
+//   })!
+//
+// Every WIT import needs one; a missing one fails the load naming all of them,
+// and so does an import with a `string` result (not supported). Callbacks for
+// names the `.wit` does not import are ignored. A callback may be a closure;
+// the Module keeps it alive until free().
+//
+// @param path       as for import_module()
+// @param callbacks  camelCase WIT import name → HostFn
+// @returns          a ready-to-call Module — release it with `m.free()`
+// @error            the loader message if the module fails to load/translate
+pub fn import_module_with(path string, callbacks map[string]HostFn) !Module {
+	mut st := &HostState{}
+	mut names := []&char{cap: callbacks.len}
+	mut ctxs := []voidptr{cap: callbacks.len}
+	for name, f in callbacks {
+		slot := &HostSlot{
+			name:  name
+			f:     f
+			state: st
+		}
+		st.slots << slot
+		names << &char(slot.name.str)
+		ctxs << voidptr(slot)
+	}
 	err := &char(unsafe { nil })
-	h := C.uwlv_import(&char(path.str), &err)
+	// With no callbacks the shim reads neither array (n = 0).
+	h := C.uwlv_import_with(&char(path.str), names.data, ctxs.data, usize(names.len), &err)
 	if h == unsafe { nil } {
 		return error(take_err(err, 'import failed'))
 	}
 	return Module{
 		handle: h
+		state:  st
 	}
 }
 
@@ -243,8 +414,22 @@ fn (m &Module) invoke(name string, args []Arg) !(int, i64, f64, string) {
 	data := unsafe {
 		if args.len > 0 { &C.uwlv_arg(cargs.data) } else { &C.uwlv_arg(nil) }
 	}
+	mut st := m.state
+	st.failed = false
+	st.err = ''
 	rc := C.uwlv_call(m.handle, &char(name.str), data, usize(args.len), &out_kind, &out_i, &out_d,
 		&out_s, &err)
+	// A callback's own error outranks the trap it caused (the loader's message
+	// would say the callback "returned void"); after a void import it is the
+	// only sign of the failure.
+	if st.failed {
+		if rc != 0 {
+			take_err(err, '')
+		} else if out_kind == k_str && out_s != unsafe { nil } {
+			C.uwlv_free_str(out_s)
+		}
+		return error(st.err)
+	}
 	if rc != 0 {
 		return error(take_err(err, 'call failed'))
 	}

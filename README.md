@@ -43,6 +43,33 @@ kind, or a `call_*` that does not match the export's result, is an error naming
 the export. A companion `.wit` next to the `.wasm` gives the typed interface;
 only when it is absent do you get the module's raw exports.
 
+### Host import callbacks
+
+A module whose `.wit` declares imports needs a V callback for every one, keyed
+by the import's camelCase name (WIT `env-mul` → `envMul`):
+
+```v
+m := uwl.import_module_with('tests/imports_50.wasm', {
+	'envMul': uwl.HostFn(fn (a []uwl.Arg) !uwl.Arg {
+		return uwl.f64(a[0].as_f64()! * a[1].as_f64()!)
+	})
+	'envAdd': fn (a []uwl.Arg) !uwl.Arg {
+		return uwl.i32(a[0].as_i32()! + a[1].as_i32()!)
+	}
+})!
+defer { m.free() }
+m.call_f64('scale', uwl.f64(3.0), uwl.f64(4.0))!  // 12.0
+```
+
+Read each argument with `as_i32` / `as_i64` / `as_f32` / `as_f64` / `as_bool`
+/ `as_str`, and return the result built like a call argument (`uwl.nothing()`
+for an import with no result). The kind must be the import's WIT result kind;
+another kind fails the export call, naming the callback, the import, the type
+and the value. An error the callback returns fails the export call as
+`host callback <name> failed: <message>`. A missing callback fails the load,
+naming every missing one. Callbacks may be closures; the module keeps them
+alive until `free()`.
+
 ## Build & run
 
 ```sh
@@ -86,7 +113,7 @@ square(5) = 25
 
 | Version | What changed | How to migrate |
 | ------- | ------------ | -------------- |
-| _next release_ (2.0.0) | Conforms to SPEC 4.0.0 (the C loader v2.0.0). A `call_*` whose kind does not match the export's result is an error (it returned `0` / `0.0` / `false` / `''`); `call_f64` no longer widens an `f32` result. A module whose `.wit` declares an import fails to load, naming each missing callback (each import used to return zero). A `.wit` that exists but cannot be read, or does not parse (e.g. a `u32` type), fails the load instead of falling back to raw exports. | Use `call_f32` for an `f32` export and `call_void` for a void one; match each `call_*` to the WIT result. Modules with WIT imports cannot be loaded from V until host callbacks are exposed. Fix any `.wit` the loader now names. |
+| _next release_ (2.0.0) | Conforms to SPEC 4.0.0 (the C loader v2.0.0). A `call_*` whose kind does not match the export's result is an error (it returned `0` / `0.0` / `false` / `''`); `call_f64` no longer widens an `f32` result. A module whose `.wit` declares an import fails to load, naming each missing callback (each import used to return zero). A `.wit` that exists but cannot be read, or does not parse (e.g. a `u32` type), fails the load instead of falling back to raw exports. | Use `call_f32` for an `f32` export and `call_void` for a void one; match each `call_*` to the WIT result. Load a module with WIT imports through the new `import_module_with(path, callbacks)`, giving a callback for every import. Fix any `.wit` the loader now names. |
 
 Versions follow [Semantic Versioning 2.0.0](https://semver.org): a breaking
 change always comes with a new major version, after at least one minor release
@@ -105,6 +132,11 @@ reference loader and checked against `tests/fixtures.json` by sha256.
 
 - `uwl.import_module(path string) !Module` — load a module (its `.wit` is
   auto-detected; a `@N` path suffix pins the version).
+- `uwl.import_module_with(path string, callbacks map[string]uwl.HostFn) !Module` —
+  the same, with host callbacks for the module's WIT imports
+  (`type HostFn = fn (args []Arg) !Arg`; see [Host import callbacks](#host-import-callbacks)).
+- `arg.as_i32 / as_i64 / as_f32 / as_f64 / as_bool / as_str() !T` — read a
+  callback argument (another kind is an error); `uwl.nothing()` — a void result.
 - `m.call_i32 / call_i64 / call_f32 / call_f64 / call_bool / call_str(name, ...Arg) !T` —
   call an export whose WIT result is that kind (any other kind is an error).
   Build args with `uwl.i32/i64/f32/f64/boolean/text`.
@@ -143,9 +175,10 @@ the wasmtime headers, keeping them out of V's translation unit.
 - The vendored C loader header is `uwl/universal_wasm_loader.h`;
   keep it in sync with the upstream
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
-- Host import callbacks are not yet exposed from V (pure-compute / library
-  modules only). SPEC 4.0.0 requires one for every WIT import, so a module
-  whose `.wit` declares imports fails to load, naming them.
+- A callback for an import with no result cannot stop the WASM code that
+  called it: the C loader gives such an import no way to trap. If it returns
+  an error, the WASM function runs on to its end, and then the export call
+  fails with that error.
 - The loader reads local files only (no http), so SPEC § 11's fetch time limit
   does not apply.
 - Maintainers: releases use `bun scripts/bump-version.ts <major|minor|patch>`,

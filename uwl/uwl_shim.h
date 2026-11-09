@@ -18,17 +18,24 @@
 /* Opaque module handle; the full definition lives in the loader. */
 typedef struct uwl_module uwl_module_t;
 
-/* One call argument. Only the field matching `kind` is read. */
+/* One value (call argument, call result, or host-callback argument / result).
+ * Only the field matching `kind` is read. */
 typedef struct {
-    int          kind; /* uwl_kind_t: 1=i32 2=i64 3=f32 4=f64 5=bool 6=str */
+    int          kind; /* uwl_kind_t: 0=void 1=i32 2=i64 3=f32 4=f64 5=bool 6=str */
     long long    i;    /* i32 / i64 / bool */
     double       d;    /* f32 / f64 */
-    const char  *s;    /* string */
+    const char  *s;    /* string (NUL-terminated; borrowed) */
 } uwlv_arg;
 
-/* Load a module (host imports not supported from V yet). Returns NULL with
- * *err set (heap; free with uwlv_free_str) on failure. */
-uwl_module_t *uwlv_import(const char *path, char **err);
+/*
+ * Load a module. `names[k]` is the camelCase WIT import name of host callback
+ * k, and `ctxs[k]` the context the loader hands back for it; every call of
+ * that import reaches uwlv_host_dispatch(ctxs[k], ...). `n` may be 0 (both
+ * arrays NULL). Returns NULL with *err set (heap; free with uwlv_free_str) on
+ * failure — including a WIT import with no callback (SPEC 4.0.0 § 4).
+ */
+uwl_module_t *uwlv_import_with(const char *path, const char *const *names,
+                               void *const *ctxs, size_t n, char **err);
 void          uwlv_free(uwl_module_t *m);
 void          uwlv_free_str(char *s);
 
@@ -42,5 +49,15 @@ int uwlv_call(uwl_module_t *m, const char *name,
               const uwlv_arg *args, size_t n,
               int *out_kind, long long *out_i, double *out_d, char **out_s,
               char **err);
+
+/*
+ * DEFINED IN V (uwl.v, `@[export]`), called by the shim's import trampoline:
+ * runs the V callback behind `ctx` with the decoded `args` (strings borrowed
+ * for the call). Returns 0 with *out set to the callback's value, or -1 when
+ * the callback failed (V keeps the message and reports it from the call); the
+ * shim then hands the loader a void value. (No `const` on `args`: the
+ * prototype must match the one V generates for the exported function.)
+ */
+int uwlv_host_dispatch(void *ctx, uwlv_arg *args, size_t n, uwlv_arg *out);
 
 #endif /* UWL_SHIM_H */
