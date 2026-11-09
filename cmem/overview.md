@@ -51,9 +51,10 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   publish script (then `publish.vsh`, now `publish.ts`) says `synapticforge1.uwl`. The only `jrmarcum` strings left outside
   `cmem/` are the JSR scope `@jrmarcum/universal-wasm-loader` in the vendored header, which is
   correct. (The owner removed the README's JSR sentence on GitHub in `61cb1e9`, 2026-10-21.)
-- **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
-  (`release` pushes with local `git`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
-  depends on repo secrets or Actions surviving the transfer. `release.ts` pushes to `origin`, so
+- **Org Actions policy / secrets:** no release secret (`release` pushes with local `git`, and
+  `publish` is a no-op). Since 2026-11-09 there IS a workflow (`.github/workflows/release.yml`);
+  it needs only the job's own `GITHUB_TOKEN` (`contents: write` in its `release` job) and uses no
+  `uses:` actions, so an org Actions policy that allows only GitHub-owned actions cannot block it. `release.ts` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
 ## Current state (re-read 2026-11-09; v1 implemented 2026-06-19)
@@ -272,7 +273,11 @@ the SDK `lib/`).
   `vendor/` (Bun only: `fetch()` with 3 attempts + an in-process zip extractor, stored + deflate;
   defaults `45.0.2` / `x86_64-mingw`). **Windows SDKs only** (`*-mingw`, `*-windows`): wasmtime
   ships the Linux/macOS C API as `.tar.xz`; the script refuses those platforms up front. It keeps no
-  `.zip` on disk (the `.vsh` downloaded to `vendor/<name>.zip` and removed it after).
+  `.zip` on disk (the `.vsh` downloaded to `vendor/<name>.zip` and removed it after). **Since
+  2026-11-09:** a 300 s limit per attempt (best-practices 7.21), and a sha256 pin per SDK (`PINS`;
+  v45.0.2 mingw = `233ac3d1…f7c26`, measured that day — wasmtime publishes no checksum file). A
+  mismatch refuses before extracting (proven: a zero pin → exit 1, `vendor/` empty); an SDK
+  without a pin downloads with a warning that prints its hash.
 - Run the example (Zig-cc path, from the repo root):
   ```sh
   v -o scripts/zigcc.exe scripts/zigcc.v            # once
@@ -387,14 +392,43 @@ Not exercised against GitHub in either port: the `gh release create` path (remov
    `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
    `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`) plus `bun scripts/test.ts`, then
    `bun scripts/compat.ts --release` (also under `--dry-run` / `--no-build`), tags `v<version>`, pushes branch + tag to
-   `origin`, and prints the **GitHub Release page as an OWNER item**: the pre-filled web-UI link
-   `https://github.com/<owner>/<repo>/releases/new?tag=…&title=…&body=…`, derived from the remote's
-   URL (`--notes` fills the body; `--no-release` prints nothing). 🔒 **No `gh`** (owner, 2026-11-08;
-   workspace letter H30, Tooling rule 9): until 2026-11-09 this step ran `gh release view` /
-   `gh release create`, and skipped when `gh` was missing. Proven on a scratch clone (version 9.9.9,
-   GitHub remote URL, `--dry-run --no-build --notes "a & b?"`): exit 0, the link printed with the
-   body encoded (`a+%26+b%3F`). Idempotent (reuses a tag only if it points at HEAD).
-   Does **not** publish to VPM. `--dry-run` / `--no-release` / `--no-build` / `--remote`.
+   `origin`, **reads the push back** (`ls-remote`: the branch and `<tag>^{}` must both be HEAD,
+   else exit 1; H32), and prints where the Release page will appear
+   (`…/releases/tag/<tag>`): **the tag push runs `.github/workflows/release.yml`, which makes the
+   page** (see "CI release workflow"). Idempotent (reuses a tag only if it points at HEAD). Does
+   **not** publish to VPM. `--dry-run` / `--no-build` / `--remote`. History: until 2026-11-09 this
+   step ran `gh release view` / `create` (skipped without `gh`); 2026-11-09 (2.0.1) it printed the
+   pre-filled `releases/new` link as an owner item (`--notes`, `--no-release`; both dropped when CI
+   took the page over).
+2a. **CI release workflow, `.github/workflows/release.yml` (2026-11-09; workspace H32 / C41, owner:
+   "they both need the CI and release pages, not by hand").** Triggers: a `v*` tag push (both jobs)
+   and a push to `main` (`checks` only, so the CI gate is proven before a release relies on it). No
+   `workflow_dispatch`: owner, same day, "only new tags will get release pages" (no backfill).
+   - `checks` (windows-latest, Git Bash, `contents: read`, tokenless full clone): installs Bun 1.4.4,
+     Zig 0.17.1 and V 0.5.2 (= `7647ce1`) from their official zips, each pinned by version AND
+     sha256 (Bun from its SHASUMS256.txt, matching loader-go's Linux pin; Zig from
+     ziglang.org's index.json; V's `v_windows.zip` hashed here, and its `v.exe` reports `0.5.2
+     7647ce1`); then `fetch-wasmtime.ts`, the suite, the example (each adder line matched exactly),
+     `surface.ts --check`, and `compat.ts --release` on a tag / report mode on `main`.
+   - `release` (tags only, `needs: checks`, ubuntu, `contents: write` only): tokenless clone of the
+     tag, which must be the commit `checks` passed; pinned Linux Bun; `scripts/github-release.ts`.
+   - `scripts/github-release.ts` (REST API, `GITHUB_TOKEN`, 30 s per call): (1) the tag exists on
+     GitHub and peels to that commit — else refuse, because `POST /releases` would CREATE a missing
+     tag; (2) an existing page = done, no write; (3) POST (`generate_release_notes` under a VPM
+     install line), read back (tag, not draft), re-check the tag. `--dry-run`.
+   - **Proof (2026-11-09, local):** a one-time mock-API harness, 12 cases all PASS: lightweight /
+     annotated tag → POST; tag missing / at another commit → refused, no POST; page exists, dry-run →
+     no write; POST 422, read-back draft, no token, tag moved during the write, unknown argument →
+     exit 1; an API that never answers → exit 1 after ~1 s with `GITHUB_API_TIMEOUT_MS=1000`.
+     Mutants: skip the first tag check → only "another commit" red (it POSTed); skip the
+     existing-page stop → only "page exists" red; no time limit → only the hang case red (20 s, then
+     a write). A local **rehearsal of `checks`** (scratch clone, the three pinned zips first on
+     `PATH`, verified by `which`): all three sha256 OK, wasmtime pin OK, suite 89/89, the three adder
+     lines, surface current, compat floor patch and v2.0.1's 89 green. ⚠️ The rehearsal caught two
+     pins that had lost their last hex digit: `sha256sum` printed a leading `\` (escaped path) and
+     `cut -c1-64` kept it. Re-measured from stdin. **Not yet proven on GitHub:** the first push to
+     `main` runs `checks`; the first new tag runs `release`, whose page's `author.login` should be
+     `github-actions[bot]` (H32 asks for it in the ledger row).
 3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
    https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
@@ -432,8 +466,8 @@ fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut wi
 `main`, which ran the example, the suite (42/42) and `compat.ts --release` (patch step) before it
 tagged. **Annotated tag `v1.1.1` (`e9594a3`) → `f5c964d`, pushed with `main`, read back with
 `ls-remote`;** `publish.ts` found the tag locally and on `origin`; published on VPM (owner),
-verified by an install (see "Repository home"). The GitHub Release page was not made — 🗓️ OWNER
-item (GitHub web UI).
+verified by an install (see "Repository home"). The GitHub Release page was not made (and will not
+be: owner, 2026-11-09, "only new tags will get release pages").
 
 **Release 2.0.0 (2026-11-08, owner: "update the project memory files, commit, push then bump and
 release") — a MAJOR:** SPEC 4.0.0 (row C29: the loader-c v2.0.0 header, kind-checked `call_*`,
@@ -445,7 +479,8 @@ additions; 16 → 27 symbols). Cut with `bump-version.ts major` (on `release/2.0
 → **annotated tag `v2.0.0` (`538c053`) → `3cfce9a`, `main` + tag pushed, read back with
 `ls-remote`** (`b12c584..3cfce9a`). `publish.ts --yes` (the VPM no-op) found the tag. **Verified as a
 user:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod` version `2.0.0` at
-`3cfce9a`, the same day. The GitHub Release page was not made — 🗓️ OWNER item (GitHub web UI).
+`3cfce9a`, the same day. The GitHub Release page was not made (and will not be: owner, 2026-11-09,
+"only new tags will get release pages").
 ⚠️ **Order changed on purpose:** the owner said "push then bump", but before the bump the gate's
 `compat.ts` (report mode) is RED. It runs the previous tag's tests whatever the floor, and v1.1.1's
 `imports_50 … reads_zero` test is the intended break. A red step means no push (INDEX), so the bump
@@ -463,8 +498,8 @@ allows for a patch: full gate on `5bef88a` (89/89, the three adder lines, surfac
 **annotated tag `v2.0.1` (`ef2299a`) → `03307ac`, `main` + tag pushed, read back with
 `ls-remote`**. The new owner-item path printed the Release page link (its first real run).
 `publish.ts --yes` found the tag. **Verified as a user:** a scratch `v install synapticforge1.uwl`
-gave `v.mod` 2.0.1 at `03307ac`, with `uwl_err` in the shim. 🗓️ OWNER: the GitHub Release page
-(`…/releases/new?tag=v2.0.1`).
+gave `v.mod` 2.0.1 at `03307ac`, with `uwl_err` in the shim. No Release page (owner, 2026-11-09:
+"only new tags will get release pages"; CI makes them from the next tag).
 
 **Release state (2026-11-09):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`,
 `v2.0.0` → `3cfce9a`, `v2.0.1` → `03307ac`; `v1.0.0` exists only locally (never pushed, see below).
@@ -499,9 +534,11 @@ checked.
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
   (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` on 2026-11-08; to -c `v2.1.0` since
   2026-11-09).
-- 🗓️ **OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0` and `v2.0.1`** (the tags exist). It is a
-  GitHub web-UI task, not something a script here does (no `gh`, H30): open
-  `https://github.com/synapticforge1/universalWasmLoader-v/releases/new?tag=v2.0.0`.
+- ~~OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0`, `v2.0.1`~~ — **DECIDED, owner
+  2026-11-09: "only new tags will get release pages"**; these tags stay without one. New tags get
+  theirs from CI (see "CI release workflow").
+- **The CI workflow is unproven on GitHub** until the first push to `main` (`checks`) and the
+  first new tag (`release`); proven locally only (see "CI release workflow").
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or
   `--no-build`).
