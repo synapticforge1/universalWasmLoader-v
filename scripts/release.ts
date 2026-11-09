@@ -1,13 +1,13 @@
 // Cut a release of universalWasmLoader-v consistently.
 //
 // The single source of truth for the version is the `version:` field in v.mod.
-// This script reads it, tags the current commit `v<version>`, pushes the branch
-// and tag to `origin`, and (unless --no-release) prints the GitHub Release page
-// as an OWNER item: the web-UI link that opens it pre-filled. No GitHub CLI
-// (owner, 2026-11-08; workspace letter H30). VPM (the V package manager) resolves the
-// package from the git repo itself, so the pushed tag/commit is the part that
-// actually matters; the GitHub Release is human-readable polish. Publishing to
-// VPM is a separate, deliberate step; see scripts/publish.ts.
+// This script reads it, runs the gate, tags the current commit `v<version>` and
+// pushes the branch and tag to `origin`. The tag push runs
+// .github/workflows/release.yml, which creates the GitHub Release page (owner,
+// 2026-11-09, workspace row C41; no GitHub CLI, H30); this script prints where
+// the page will be. VPM (the V package manager) resolves the package from the
+// git repo itself, so the pushed tag/commit is the part that actually matters.
+// Publishing to VPM is a separate, deliberate step; see scripts/publish.ts.
 //
 // Idempotent: if the tag already exists it is reused (must point at HEAD).
 import { existsSync } from "node:fs";
@@ -18,8 +18,6 @@ const USAGE = `
 Cut a release of universalWasmLoader-v (version from v.mod).
 
 Usage: bun scripts/release.ts [options]
-  --notes <text>   Release notes body for the GitHub Release link (default: a generic line).
-  --no-release     Push the tag only; do not print the GitHub Release owner item.
   --no-build       Skip the \`v run examples/adder.v\` + \`bun scripts/test.ts\`
                    verification (the compatibility gate still runs).
   --remote <name>  Git remote to push to (default: origin).
@@ -27,26 +25,22 @@ Usage: bun scripts/release.ts [options]
   -h, --help       Show this help.
 
 Idempotent: if the tag already exists it is reused (must point at HEAD). The
-GitHub Release page is an owner item: its pre-filled link is printed.
+GitHub Release page is made by .github/workflows/release.yml on the tag push.
 `;
 
 process.chdir(ROOT);
 
-let notes = "";
-let makeRelease = true;
 let doBuild = true;
 let remote = "origin";
 let dryRun = false;
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--notes" || a === "--remote") {
+  if (a === "--remote") {
     if (i + 1 >= argv.length) die(2, `missing value for ${a}`);
-    if (a === "--notes") notes = argv[i + 1];
-    else remote = argv[i + 1];
+    remote = argv[i + 1];
     i++;
-  } else if (a === "--no-release") makeRelease = false;
-  else if (a === "--no-build") doBuild = false;
+  } else if (a === "--no-build") doBuild = false;
   else if (a === "--dry-run") dryRun = true;
   else if (a === "-h" || a === "--help") help(USAGE);
   else die(2, `unknown argument: ${a}`);
@@ -113,20 +107,30 @@ if (!tagIsThere) run(dryRun, ["git", "tag", "-a", tag, "-m", `universalWasmLoade
 run(dryRun, ["git", "push", remote, branch]);
 run(dryRun, ["git", "push", remote, tag]);
 
-if (makeRelease) {
-  // A GitHub web-UI task, so an owner item: the link opens the form pre-filled.
-  const body = notes ||
-    `Release ${tag} of universalWasmLoader-v — idiomatic V binding for the Universal WASM Loader.`;
-  console.log(`OWNER: create the GitHub Release page for ${tag}:`);
-  console.log(`  ${releasePageUrl(capture(["git", "remote", "get-url", remote]).out, tag, body)}`);
+// Read the push back (H32): the remote's branch and the tag's peeled commit must both be HEAD.
+if (!dryRun) {
+  const head = capture(["git", "rev-parse", "HEAD"]).out;
+  const ls = capture(["git", "ls-remote", remote, `refs/heads/${branch}`, `refs/tags/${tag}^{}`]);
+  if (ls.code !== 0) die(1, `git ls-remote ${remote} failed; check the push by hand`);
+  const seen = new Map(ls.out.split("\n").filter(Boolean).map((l) => {
+    const [id, ref] = l.split("\t");
+    return [ref, id] as [string, string];
+  }));
+  const remoteBranch = seen.get(`refs/heads/${branch}`) ?? "(missing)";
+  const remoteTag = seen.get(`refs/tags/${tag}^{}`) ?? "(missing)";
+  console.log(`read back from ${remote}: ${branch} = ${remoteBranch}, ${tag}^{} = ${remoteTag}`);
+  if (remoteBranch !== head || remoteTag !== head) die(1, `${remote} does not hold HEAD (${head}) for both; check the push`);
 }
+
+// The tag push runs .github/workflows/release.yml, which makes the page.
+console.log(`The tag push runs .github/workflows/release.yml, which creates the GitHub Release page:`);
+console.log(`  ${releasePageUrl(capture(["git", "remote", "get-url", remote]).out, tag)}`);
 
 console.log(`Done: ${tag}`);
 
-/** GitHub's "new release" form for `tag`, pre-filled, from a remote URL (https or ssh form). */
-function releasePageUrl(remoteUrl: string, tag: string, body: string): string {
+/** Where the Release page for `tag` appears, from a remote URL (https or ssh form). */
+function releasePageUrl(remoteUrl: string, tag: string): string {
   const m = remoteUrl.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/);
-  if (!m) return `(remote ${remoteUrl || remote} is not a GitHub URL; create the Release for ${tag} by hand)`;
-  const q = new URLSearchParams({ tag, title: tag, body });
-  return `https://github.com/${m[1]}/${m[2]}/releases/new?${q}`;
+  if (!m) return `(remote ${remoteUrl || remote} is not a GitHub URL; no workflow runs there)`;
+  return `https://github.com/${m[1]}/${m[2]}/releases/tag/${tag}`;
 }

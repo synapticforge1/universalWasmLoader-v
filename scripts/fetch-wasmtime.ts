@@ -11,6 +11,12 @@
 // this script does not unpack (the binding's #flag lines link MinGW only).
 // Needs nothing but Bun: fetch() downloads, and the .zip is extracted in-process
 // (stored + deflate entries).
+//
+// Each download attempt has its own time limit (workspace best-practices 7.21),
+// and a pinned SDK's sha256 must match or nothing is extracted. wasmtime
+// publishes no checksum file, so PINS holds the hash measured when the pin was
+// added; CI (.github/workflows/release.yml) downloads through this script.
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { inflateRawSync } from "node:zlib";
@@ -30,6 +36,13 @@ const vendor = join(ROOT, "vendor");
 const name = `wasmtime-v${version}-${platform}-c-api`;
 const url = `https://github.com/bytecodealliance/wasmtime/releases/download/v${version}/${name}.zip`;
 
+/** sha256 of each pinned SDK zip (measured 2026-11-09 for v45.0.2 mingw, the SDK uwl.v links). */
+const PINS: Record<string, string> = {
+  "wasmtime-v45.0.2-x86_64-mingw-c-api": "233ac3d1e961c0b8b7e1726059ed93639c2dcff57732424afe90a809a19f7c2",
+};
+/** Time limit for one download attempt. */
+const ATTEMPT_MS = 300_000;
+
 try {
   mkdirSync(vendor, { recursive: true });
 } catch (e) {
@@ -44,7 +57,7 @@ console.log(`Downloading ${url}`);
 let zip: Buffer | undefined;
 for (let attempt = 1; attempt < 4; attempt++) {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(ATTEMPT_MS) });
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     zip = Buffer.from(await res.arrayBuffer());
     break;
@@ -52,6 +65,15 @@ for (let attempt = 1; attempt < 4; attempt++) {
     if (attempt === 3) fail(`download failed: ${e}`);
     console.error(`warning: download attempt ${attempt} failed (${e}); retrying`);
   }
+}
+const got = createHash("sha256").update(zip!).digest("hex");
+const want = PINS[name];
+if (want === undefined) {
+  console.error(`warning: ${name} has no sha256 pin; downloaded ${got}`);
+} else if (got !== want) {
+  fail(`sha256 mismatch for ${name}.zip: got ${got}, pinned ${want}; nothing extracted`);
+} else {
+  console.log(`sha256 ok: ${got}`);
 }
 console.log("Extracting");
 extractZip(zip!, vendor);
