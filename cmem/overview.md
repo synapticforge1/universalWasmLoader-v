@@ -78,7 +78,9 @@ Working tree (39 tracked files, 2026-10-26; still 39 on 2026-11-09):
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
   release being targeted. **Since 2026-11-09: loader-c's `v2.1.0` (SPEC v4.0.0 + `uwl_err` /
   `UWL_ERR`), byte for byte** (`git -C ../universalWasmLoader-c show v2.1.0:universal_wasm_loader.h`,
-  sha256 `01a7ad5e…`; tag `v2.1.0` → `edc6993`, read back with `ls-remote`). From 2026-11-08:
+  sha256 `01a7ad5e…`; tag `v2.1.0` → `edc6993`, read back with `ls-remote`). **loader-c `v2.1.1`
+  (tag → `dc81b25`, `ls-remote`, 2026-11-09) has the SAME header byte for byte** (`01a7ad5e…`);
+  its changes are CI only (its H32 Release-page job, the H31 Bun pin), so nothing is re-vendored. From 2026-11-08:
   `v2.0.0` (`5ffa482d…`, the hash loader-zig recorded for its copy). Was loader-c `v1.1.1` (SPEC v3.0.0, `f3af6143…`) on
   2026-10-26. See "SPEC 4.0.0".
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`); it loads
@@ -535,7 +537,7 @@ checked.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
   (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` on 2026-11-08; to -c `v2.1.0` since
-  2026-11-09).
+  2026-11-09, which is also -c `v2.1.1`'s header).
 - ~~OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0`, `v2.0.1`~~ — **DECIDED, owner
   2026-11-09: "only new tags will get release pages"**; these tags stay without one. New tags get
   theirs from CI (see "CI release workflow").
