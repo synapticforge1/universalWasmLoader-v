@@ -3,8 +3,8 @@
 // The single source of truth for the version is the `version:` field in v.mod.
 // This script reads it, tags the current commit `v<version>`, pushes the branch
 // and tag to `origin`, and (unless --no-release) prints the GitHub Release page
-// as an OWNER item: the web-UI link that opens it pre-filled. No `gh` (owner,
-// 2026-11-08; workspace letter H30). VPM (the V package manager) resolves the
+// as an OWNER item: the web-UI link that opens it pre-filled. No GitHub CLI
+// (owner, 2026-11-08; workspace letter H30). VPM (the V package manager) resolves the
 // package from the git repo itself, so the pushed tag/commit is the part that
 // actually matters; the GitHub Release is human-readable polish. Publishing to
 // VPM is a separate, deliberate step; see scripts/publish.ts.
