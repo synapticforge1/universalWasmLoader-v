@@ -65,7 +65,8 @@ Read each argument with `as_i32` / `as_i64` / `as_f32` / `as_f64` / `as_bool`
 / `as_str`, and return the result built like a call argument (`uwl.nothing()`
 for an import with no result). The kind must be the import's WIT result kind;
 another kind fails the export call, naming the callback, the import, the type
-and the value. An error the callback returns fails the export call as
+and the value. An error the callback returns stops the WASM at that import
+(an import with no result too) and fails the export call as
 `host callback <name> failed: <message>`. A missing callback fails the load,
 naming every missing one. Callbacks may be closures; the module keeps them
 alive until `free()`.
@@ -175,10 +176,6 @@ the wasmtime headers, keeping them out of V's translation unit.
 - The vendored C loader header is `uwl/universal_wasm_loader.h`;
   keep it in sync with the upstream
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
-- A callback for an import with no result cannot stop the WASM code that
-  called it: the C loader gives such an import no way to trap. If it returns
-  an error, the WASM function runs on to its end, and then the export call
-  fails with that error.
 - The loader reads local files only (no http), so SPEC § 11's fetch time limit
   does not apply.
 - Maintainers: releases use `bun scripts/bump-version.ts <major|minor|patch>`,

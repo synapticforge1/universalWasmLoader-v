@@ -44,6 +44,10 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
   / `.wat` / `.json` fixtures feed a sha256 stamp. Never "fix" endings with `git config`.
 - **Nothing is pushed, tagged or published unless the owner says so.** `release.ts` pushes and tags;
   `publish.ts` is a no-op for VPM.
+- 🔒 **No `gh`** (owner, 2026-11-08; workspace letter H30, Tooling rule 9): check GitHub with `git`
+  itself (`git ls-remote origin`, `git fetch`) and VPM with an install. A GitHub web-UI task (a
+  Release page) is an OWNER item, never "blocked on gh". `release.ts` prints the Release page's
+  pre-filled link as one (since 2026-11-09).
 - 🔒 **Every test passes before ANY push** (owner, 2026-10-26: "we need to make sure that all tests
   pass before we push"). Immediately before `git push`, on the clean commit being pushed, run the
   full regression gate (trigger 6) whatever the push contains, docs included: `bun scripts/test.ts`

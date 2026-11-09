@@ -5,10 +5,12 @@
 
 #include <stdlib.h>
 
-/* uwlv_arg -> uwl_val_t. A string is COPIED (free the result with
- * uwl_val_free); an unknown kind becomes void, which the loader refuses. */
+/* uwlv_arg -> uwl_val_t. A string (or an error's message) is COPIED (free the
+ * result with uwl_val_free); an unknown kind becomes void, which the loader
+ * refuses. */
 static uwl_val_t uwlv__to_val(const uwlv_arg *a) {
     switch (a->kind) {
+        case UWL_ERR:  return uwl_err(a->s);
         case UWL_I32:  return uwl_i32((int32_t)a->i);
         case UWL_I64:  return uwl_i64((int64_t)a->i);
         case UWL_F32:  return uwl_f32((float)a->d);
@@ -35,16 +37,17 @@ static uwlv_arg uwlv__from_val(const uwl_val_t *v) {
 }
 
 /* The one uwl_host_fn_t for every import: decode, run the V callback, encode.
- * The loader checks the returned kind against the import's WIT result. */
+ * A V error comes back as kind UWL_ERR and becomes uwl_err(msg), which makes
+ * the loader trap at the import, void ones included (loader-c 2.1.0, C39);
+ * any other kind is checked against the import's WIT result by the loader. */
 static uwl_val_t uwlv__trampoline(const uwl_val_t *args, size_t nargs, void *userdata) {
     uwlv_arg stack[8];
     uwlv_arg *a = nargs <= 8 ? stack : (uwlv_arg *)malloc(nargs * sizeof(uwlv_arg));
-    if (!a) return uwl_void();
+    if (!a) return uwl_err("out of memory passing the arguments to the V callback");
     for (size_t i = 0; i < nargs; i++) a[i] = uwlv__from_val(&args[i]);
     uwlv_arg out = { UWL_VOID, 0, 0.0, NULL };
-    int rc = uwlv_host_dispatch(userdata, a, nargs, &out);
+    uwlv_host_dispatch(userdata, a, nargs, &out);
     if (a != stack) free(a);
-    if (rc != 0) return uwl_void();
     return uwlv__to_val(&out);
 }
 

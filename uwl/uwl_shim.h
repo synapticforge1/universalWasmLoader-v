@@ -21,7 +21,7 @@ typedef struct uwl_module uwl_module_t;
 /* One value (call argument, call result, or host-callback argument / result).
  * Only the field matching `kind` is read. */
 typedef struct {
-    int          kind; /* uwl_kind_t: 0=void 1=i32 2=i64 3=f32 4=f64 5=bool 6=str */
+    int          kind; /* uwl_kind_t: 0=void 1=i32 2=i64 3=f32 4=f64 5=bool 6=str 7=err */
     long long    i;    /* i32 / i64 / bool */
     double       d;    /* f32 / f64 */
     const char  *s;    /* string (NUL-terminated; borrowed) */
@@ -53,11 +53,11 @@ int uwlv_call(uwl_module_t *m, const char *name,
 /*
  * DEFINED IN V (uwl.v, `@[export]`), called by the shim's import trampoline:
  * runs the V callback behind `ctx` with the decoded `args` (strings borrowed
- * for the call). Returns 0 with *out set to the callback's value, or -1 when
- * the callback failed (V keeps the message and reports it from the call); the
- * shim then hands the loader a void value. (No `const` on `args`: the
- * prototype must match the one V generates for the exported function.)
+ * for the call) and sets *out to its value — or, when the callback failed, to
+ * kind 7 (UWL_ERR) with `s` the message, borrowed until the shim copies it into
+ * uwl_err(). (No `const` on `args`: the prototype must match the one V
+ * generates for the exported function.)
  */
-int uwlv_host_dispatch(void *ctx, uwlv_arg *args, size_t n, uwlv_arg *out);
+void uwlv_host_dispatch(void *ctx, uwlv_arg *args, size_t n, uwlv_arg *out);
 
 #endif /* UWL_SHIM_H */

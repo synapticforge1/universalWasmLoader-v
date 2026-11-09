@@ -2,14 +2,14 @@
 //
 // The single source of truth for the version is the `version:` field in v.mod.
 // This script reads it, tags the current commit `v<version>`, pushes the branch
-// and tag to `origin`, and (unless --no-release) creates the matching GitHub
-// Release. VPM (the V package manager) resolves the package from the git repo
-// itself, so the pushed tag/commit is the part that actually matters; the GitHub
-// Release is human-readable polish. Publishing to VPM is a separate, deliberate
-// step; see scripts/publish.ts.
+// and tag to `origin`, and (unless --no-release) prints the GitHub Release page
+// as an OWNER item: the web-UI link that opens it pre-filled. No `gh` (owner,
+// 2026-11-08; workspace letter H30). VPM (the V package manager) resolves the
+// package from the git repo itself, so the pushed tag/commit is the part that
+// actually matters; the GitHub Release is human-readable polish. Publishing to
+// VPM is a separate, deliberate step; see scripts/publish.ts.
 //
-// Idempotent: if the tag already exists it is reused (must point at HEAD); an
-// existing GitHub Release is left untouched.
+// Idempotent: if the tag already exists it is reused (must point at HEAD).
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { capture, die, has, help, modField, porcelain, readMod, ROOT, run, tagExists } from "./_lib.ts";
@@ -18,16 +18,16 @@ const USAGE = `
 Cut a release of universalWasmLoader-v (version from v.mod).
 
 Usage: bun scripts/release.ts [options]
-  --notes <text>   Release notes body (default: a generic line).
-  --no-release     Push the tag only; skip creating a GitHub Release.
+  --notes <text>   Release notes body for the GitHub Release link (default: a generic line).
+  --no-release     Push the tag only; do not print the GitHub Release owner item.
   --no-build       Skip the \`v run examples/adder.v\` + \`bun scripts/test.ts\`
                    verification (the compatibility gate still runs).
   --remote <name>  Git remote to push to (default: origin).
   --dry-run        Print what would happen; make no tags/pushes/releases.
   -h, --help       Show this help.
 
-Idempotent: if the tag already exists it is reused (must point at HEAD); an
-existing GitHub Release is left untouched.
+Idempotent: if the tag already exists it is reused (must point at HEAD). The
+GitHub Release page is an owner item: its pre-filled link is printed.
 `;
 
 process.chdir(ROOT);
@@ -114,15 +114,19 @@ run(dryRun, ["git", "push", remote, branch]);
 run(dryRun, ["git", "push", remote, tag]);
 
 if (makeRelease) {
-  if (!has("gh")) {
-    console.error("warning: gh CLI not found — skipping GitHub Release (tag is pushed).");
-  } else if (capture(["gh", "release", "view", tag]).code === 0) {
-    console.log(`GitHub Release ${tag} already exists — leaving it untouched.`);
-  } else {
-    const body = notes ||
-      `Release ${tag} of universalWasmLoader-v — idiomatic V binding for the Universal WASM Loader.`;
-    run(dryRun, ["gh", "release", "create", tag, "--title", tag, "--notes", body]);
-  }
+  // A GitHub web-UI task, so an owner item: the link opens the form pre-filled.
+  const body = notes ||
+    `Release ${tag} of universalWasmLoader-v — idiomatic V binding for the Universal WASM Loader.`;
+  console.log(`OWNER: create the GitHub Release page for ${tag}:`);
+  console.log(`  ${releasePageUrl(capture(["git", "remote", "get-url", remote]).out, tag, body)}`);
 }
 
 console.log(`Done: ${tag}`);
+
+/** GitHub's "new release" form for `tag`, pre-filled, from a remote URL (https or ssh form). */
+function releasePageUrl(remoteUrl: string, tag: string, body: string): string {
+  const m = remoteUrl.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/);
+  if (!m) return `(remote ${remoteUrl || remote} is not a GitHub URL; create the Release for ${tag} by hand)`;
+  const q = new URLSearchParams({ tag, title: tag, body });
+  return `https://github.com/${m[1]}/${m[2]}/releases/new?${q}`;
+}
