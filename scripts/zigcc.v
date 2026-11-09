@@ -11,6 +11,12 @@
 // MinGW-GNU target so the wasmtime GNU import library links. Every other
 // argument is passed to zig unchanged; os.Process re-quotes each one, so a
 // path like `-I"C:\dir with spaces"` survives intact.
+//
+// Zig 0.17's clang makes -Wincompatible-pointer-types an ERROR (0.16.0 warned).
+// V 0.5.2's own builtin passes `&u32` where Windows declares `LPDWORD`
+// (`WriteConsoleW` in the generated C); both are 32-bit unsigned on Windows
+// (LLP64), so that one diagnostic goes back to a warning — it stays visible
+// and every other error is unchanged.
 module main
 
 import os
@@ -18,7 +24,7 @@ import os
 const stack_flag = '-Wl,-stack='
 
 fn main() {
-	mut args := ['cc', '-target', 'x86_64-windows-gnu']
+	mut args := ['cc', '-target', 'x86_64-windows-gnu', '-Wno-error=incompatible-pointer-types']
 	for a in os.args[1..] {
 		if a.starts_with('@') && a.ends_with('.rsp') {
 			rsp := a[1..]

@@ -35,6 +35,21 @@ const k_f64 = 4 // 64-bit float (WIT f64)
 const k_bool = 5 // boolean
 const k_str = 6 // UTF-8 string
 
+// kind_name is the WIT name of a k_* discriminant, as the C loader spells it in
+// its own messages (`uwl__kind_name`). (Internal.)
+fn kind_name(k int) string {
+	return match k {
+		k_void { 'void' }
+		k_i32 { 's32' }
+		k_i64 { 's64' }
+		k_f32 { 'f32' }
+		k_f64 { 'f64' }
+		k_bool { 'bool' }
+		k_str { 'string' }
+		else { 'kind ${k}' }
+	}
+}
+
 // C.uwl_module_t is the opaque module handle owned by the C loader.
 @[typedef]
 pub struct C.uwl_module_t {}
@@ -154,9 +169,13 @@ pub struct Module {
 // called with native V values.
 //
 // The companion `.wit` (same base name, alongside the `.wasm`) is auto-detected
-// and supplies the per-export argument/result types. A `@N` suffix on `path`
-// pins the module to version N. Host import callbacks are not exposed here, so
-// only pure-compute / library modules are supported.
+// and supplies the per-export argument/result types (SPEC 4.0.0 § 2): only an
+// ABSENT `.wit` gives raw exports; a `.wit` that cannot be read or does not
+// parse fails the load, naming it and the fault. A `@N` suffix on `path` pins
+// the module to version N. Host import callbacks are not exposed here, and
+// every WIT import needs one (SPEC § 4), so a module whose `.wit` declares an
+// import fails to load, naming each missing callback: only pure-compute /
+// library modules load.
 //
 // @param path  filesystem path to the `.wasm` (optionally with a `@N` version suffix)
 // @returns     a ready-to-call Module — release it with `m.free()`
@@ -224,8 +243,8 @@ fn (m &Module) invoke(name string, args []Arg) !(int, i64, f64, string) {
 	data := unsafe {
 		if args.len > 0 { &C.uwlv_arg(cargs.data) } else { &C.uwlv_arg(nil) }
 	}
-	rc := C.uwlv_call(m.handle, &char(name.str), data, usize(args.len), &out_kind, &out_i,
-		&out_d, &out_s, &err)
+	rc := C.uwlv_call(m.handle, &char(name.str), data, usize(args.len), &out_kind, &out_i, &out_d,
+		&out_s, &err)
 	if rc != 0 {
 		return error(take_err(err, 'call failed'))
 	}
@@ -238,13 +257,30 @@ fn (m &Module) invoke(name string, args []Arg) !(int, i64, f64, string) {
 	return out_kind, out_i, out_d, s
 }
 
+// expect is invoke() for a kind-specific accessor: a result of any kind other
+// than `want` is an error, never a zero value (SPEC 4.0.0 § 4). The message is
+// the C loader's own (`uwl__call_expect`). (Internal.)
+// @param name  the exported function name
+// @param args  the native arguments (already boxed as Arg)
+// @param want  the k_* kind the accessor returns
+// @returns     (int_val, float_val, str_val) — read the field `want` selects
+// @error       the loader message, or `export '<name>' returns <kind>, not <want>`
+fn (m &Module) expect(name string, args []Arg, want int) !(i64, f64, string) {
+	kind, i, d, s := m.invoke(name, args)!
+	if kind != want {
+		return error("export '${name}' returns ${kind_name(kind)}, not ${kind_name(want)}")
+	}
+	return i, d, s
+}
+
 // call_i32 invokes export `name` and returns its `s32` result.
 // @param name  the exported function name (from the module's `.wit`)
 // @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
 // @returns     the 32-bit signed integer result
-// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `s32`
 pub fn (m &Module) call_i32(name string, args ...Arg) !int {
-	_, i, _, _ := m.invoke(name, args)!
+	i, _, _ := m.expect(name, args, k_i32)!
 	return int(i)
 }
 
@@ -252,21 +288,34 @@ pub fn (m &Module) call_i32(name string, args ...Arg) !int {
 // @param name  the exported function name (from the module's `.wit`)
 // @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
 // @returns     the 64-bit signed integer result
-// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `s64`
 pub fn (m &Module) call_i64(name string, args ...Arg) !i64 {
-	_, i, _, _ := m.invoke(name, args)!
+	i, _, _ := m.expect(name, args, k_i64)!
 	return i
 }
 
-// call_f64 invokes export `name` and returns its floating-point result.
-//
-// Handles both `f32` and `f64` exports (an `f32` result is widened to `f64`).
+// call_f32 invokes export `name` and returns its `f32` result.
 // @param name  the exported function name (from the module's `.wit`)
 // @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
-// @returns     the result as an `f64`
-// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+// @returns     the 32-bit float result
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `f32`
+pub fn (m &Module) call_f32(name string, args ...Arg) !f32 {
+	_, d, _ := m.expect(name, args, k_f32)!
+	return f32(d)
+}
+
+// call_f64 invokes export `name` and returns its `f64` result.
+//
+// Since 2.0.0 an `f32` export is refused here (it used to be widened); use call_f32().
+// @param name  the exported function name (from the module's `.wit`)
+// @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
+// @returns     the 64-bit float result
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `f64`
 pub fn (m &Module) call_f64(name string, args ...Arg) !f64 {
-	_, _, d, _ := m.invoke(name, args)!
+	_, d, _ := m.expect(name, args, k_f64)!
 	return d
 }
 
@@ -274,10 +323,21 @@ pub fn (m &Module) call_f64(name string, args ...Arg) !f64 {
 // @param name  the exported function name (from the module's `.wit`)
 // @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
 // @returns     the boolean result
-// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `bool`
 pub fn (m &Module) call_bool(name string, args ...Arg) !bool {
-	_, i, _, _ := m.invoke(name, args)!
+	i, _, _ := m.expect(name, args, k_bool)!
 	return i != 0
+}
+
+// call_void invokes export `name` for its effect and discards any result (as the
+// C loader's `uwl_call_void` does). Use it for a void export, which every typed
+// accessor refuses.
+// @param name  the exported function name (from the module's `.wit`)
+// @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
+// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+pub fn (m &Module) call_void(name string, args ...Arg) ! {
+	m.invoke(name, args)!
 }
 
 // call_str invokes export `name` and returns its `string` result.
@@ -287,8 +347,9 @@ pub fn (m &Module) call_bool(name string, args ...Arg) !bool {
 // @param name  the exported function name (from the module's `.wit`)
 // @param args  call arguments, each built with i32()/i64()/f32()/f64()/boolean()/text()
 // @returns     the string result (owned by the caller)
-// @error       the loader message if the export is missing, the arity/types mismatch, or it traps
+// @error       the loader message if the export is missing, the arity/types mismatch, or it
+//              traps; an error naming both kinds if the export does not return `string`
 pub fn (m &Module) call_str(name string, args ...Arg) !string {
-	_, _, _, s := m.invoke(name, args)!
+	_, _, s := m.expect(name, args, k_str)!
 	return s
 }

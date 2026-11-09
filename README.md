@@ -37,8 +37,11 @@ greeting := s.call_str('greet', uwl.text('World'))!          // "Hello, World!"
 
 Wrap each argument with `uwl.i32` / `i64` / `f32` / `f64` / `boolean` / `text`
 so the WIT type is unambiguous, and pick the call by its result type
-(`call_i32` / `call_i64` / `call_f64` / `call_bool` / `call_str`). A companion
-`.wit` next to the `.wasm` is required.
+(`call_i32` / `call_i64` / `call_f32` / `call_f64` / `call_bool` / `call_str`,
+or `call_void` to discard it). Nothing is coerced: a wrong argument count or
+kind, or a `call_*` that does not match the export's result, is an error naming
+the export. A companion `.wit` next to the `.wasm` gives the typed interface;
+only when it is absent do you get the module's raw exports.
 
 ## Build & run
 
@@ -83,7 +86,7 @@ square(5) = 25
 
 | Version | What changed | How to migrate |
 | ------- | ------------ | -------------- |
-| —       | none since 1.0.0 | — |
+| _next release_ (2.0.0) | Conforms to SPEC 4.0.0 (the C loader v2.0.0). A `call_*` whose kind does not match the export's result is an error (it returned `0` / `0.0` / `false` / `''`); `call_f64` no longer widens an `f32` result. A module whose `.wit` declares an import fails to load, naming each missing callback (each import used to return zero). A `.wit` that exists but cannot be read, or does not parse (e.g. a `u32` type), fails the load instead of falling back to raw exports. | Use `call_f32` for an `f32` export and `call_void` for a void one; match each `call_*` to the WIT result. Modules with WIT imports cannot be loaded from V until host callbacks are exposed. Fix any `.wit` the loader now names. |
 
 Versions follow [Semantic Versioning 2.0.0](https://semver.org): a breaking
 change always comes with a new major version, after at least one minor release
@@ -102,8 +105,10 @@ reference loader and checked against `tests/fixtures.json` by sha256.
 
 - `uwl.import_module(path string) !Module` — load a module (its `.wit` is
   auto-detected; a `@N` path suffix pins the version).
-- `m.call_i32 / call_i64 / call_f64 / call_bool / call_str(name, ...Arg) !T` —
-  call an export. Build args with `uwl.i32/i64/f32/f64/boolean/text`.
+- `m.call_i32 / call_i64 / call_f32 / call_f64 / call_bool / call_str(name, ...Arg) !T` —
+  call an export whose WIT result is that kind (any other kind is an error).
+  Build args with `uwl.i32/i64/f32/f64/boolean/text`.
+- `m.call_void(name, ...Arg) !` — call an export and discard any result.
 - `m.free()` — free the module.
 
 Errors propagate as V results (`!`), so use `!` or `or { ... }`.
@@ -125,7 +130,10 @@ the wasmtime headers, keeping them out of V's translation unit.
     compiler) — needs only `zig` on `PATH`; no Git Bash or PowerShell. It
     compiles via `zig cc`, forces the `x86_64-windows-gnu` target, and strips
     V's hardcoded `-Wl,-stack=` flag (V emits it in MSVC form, which Zig's
-    bundled `lld` rejects).
+    bundled `lld` rejects). It also keeps `-Wincompatible-pointer-types` a
+    warning: Zig 0.17 makes it an error, and V 0.5.2's own runtime trips it.
+    After pulling a change to `scripts/zigcc.v`, delete `scripts/zigcc.exe` so
+    it is rebuilt.
   - **MinGW gcc** (`-cc gcc`) — needs a MinGW gcc on `PATH`.
 - **`wasmtime.dll` must be findable at runtime** — copy
   `vendor/.../lib/wasmtime.dll` next to your binary (or the repo root for
@@ -136,10 +144,10 @@ the wasmtime headers, keeping them out of V's translation unit.
   keep it in sync with the upstream
   [`universalWasmLoader-c`](https://github.com/synapticforge1/universalWasmLoader-c) release you target.
 - Host import callbacks are not yet exposed from V (pure-compute / library
-  modules only). A module's WIT imports still load: each one returns zero, as
-  in the reference loader.
-- Pick the `call_*` that matches the export's result type: a mismatched call
-  currently returns a zero value (`0`, `0.0`, `false`, `''`) instead of an error.
+  modules only). SPEC 4.0.0 requires one for every WIT import, so a module
+  whose `.wit` declares imports fails to load, naming them.
+- The loader reads local files only (no http), so SPEC § 11's fetch time limit
+  does not apply.
 - Maintainers: releases use `bun scripts/bump-version.ts <major|minor|patch>`,
   then `bun scripts/release.ts`, then `bun scripts/publish.ts` (each takes `--help`;
   the scripts need [Bun](https://bun.sh)).
