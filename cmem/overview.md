@@ -15,7 +15,7 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26 — see "Release / publish flow", MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** cut 2026-11-08 (SPEC 4.0.0 + host callbacks) — see "Release / publish flow", MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
