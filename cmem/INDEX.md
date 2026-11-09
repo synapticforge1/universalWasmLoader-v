@@ -11,8 +11,9 @@ single-topic; this INDEX stays one line per file.
 how it lands in this repo. Where the two disagree, this repo's rule governs inside this repo — and
 today none does: every rule below conforms to the floor (checked 2026-10-26). **Pushing:** the
 owner said "push" on 2026-10-26 for that day's work, and "push then bump and release" on
-2026-11-08 for 2.0.0 and its release record, and "go" on 2026-11-09 for 2.0.1 and its record; each
-later push still needs the owner's word.
+2026-11-08 for 2.0.0 and its release record, "go" on 2026-11-09 for 2.0.1 and its record, and
+"update the project memory files, commit, push and release" the same day for 2.0.2 and its record;
+each later push still needs the owner's word.
 
 - **`cmem/` is the single home for ALL project memory**; `README.md` is the public, user-facing doc
   (no decision logs or post-mortems). The root `CLAUDE.md` is a gitignored POINTER, never
@@ -113,7 +114,7 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.1 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, release flow + state (2.0.1 released and install-verified 2026-11-09), the CI release workflow (2026-11-09, H32: checks + Release page), known gaps |
+| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.2 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, release flow + state (2.0.2 released 2026-11-09), the CI release workflow (H32: checks + Release page; proven on GitHub with v2.0.2), known gaps |
 | [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests (live since `v1.1.1`); 2.0.0 (first major: report mode red by design) and 2.0.1 (Rule 3 caught a message change); its inversion |
 | [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules (L1–L2) + the workspace's 28 ★ rules, copied verbatim under a dated stamp |
