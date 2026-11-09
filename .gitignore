@@ -19,6 +19,10 @@
 *.pdb
 *.o
 *.obj
+# the linker's import library / export file for a binary that exports
+# uwlv_host_dispatch (written next to it, e.g. examples/uwl_shim.lib)
+*.lib
+*.exp
 /examples/adder
 /scripts/zigcc
 main
