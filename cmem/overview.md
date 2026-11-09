@@ -15,7 +15,7 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** cut 2026-11-08 (SPEC 4.0.0 + host callbacks) — see "Release / publish flow", MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks; on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
@@ -42,7 +42,8 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   `synapticforge1.uwl` description now shows its em dash correctly (the `â` glitch is gone).
   **1.1.1 is what users get:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod`
   version `1.1.1` at `f5c964d` (the `v1.1.1` tag's commit), `tests/` included. VPM's API carries no
-  version field; the install is the check.
+  version field; the install is the check. **2026-11-08: 2.0.0 is what users get** — the same
+  install gave `v.mod` version `2.0.0` at `3cfce9a` (`v2.0.0`'s commit), minutes after the push.
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
@@ -212,7 +213,8 @@ result of another kind (S8), plus `call_f32` / `call_void`. (5) n/a: local files
 Rows of § 8 "Refusals" that need a callback (only `envMul`, callback results, async) are n/a here.
 The string-result-import row reports the missing callback (checked first in the C loader) — it
 names `env-mul` before any `.wasm` is read. **Version decision: MAJOR, 2.0.0** (behaviour accepts
-less; the gate floor is major by the SPEC move); bump, push and release are the owner's.
+less; the gate floor is major by the SPEC move) — **RELEASED 2026-11-08** (tag `v2.0.0` →
+`3cfce9a`; see "Release / publish flow").
 Commits: `74d61c3` (behaviour + tests + docs), `8f63370` (surface re-baseline alone, 16 → 18).
 **Gate on `8f63370`:** suite GREEN 70/70; example the three adder lines; `surface.ts --check`
 current (18 symbols, SPEC 4.0.0); `compat.ts` floor **major** (`major: SPEC 3.0.0 -> 4.0.0`, two
@@ -411,9 +413,29 @@ tagged. **Annotated tag `v1.1.1` (`e9594a3`) → `f5c964d`, pushed with `main`, 
 verified by an install (see "Repository home"). The GitHub Release page was skipped (`gh` not
 logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
 
-**Release state (2026-10-26):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`;
-`v1.0.0` exists only locally (never pushed, see below). `v1.1.1` is the first tag that carries
-`tests/`, so from the next bump on, Rule 3 runs its suite against the new source.
+**Release 2.0.0 (2026-11-08, owner: "update the project memory files, commit, push then bump and
+release") — a MAJOR:** SPEC 4.0.0 (row C29: the loader-c v2.0.0 header, kind-checked `call_*`,
+`call_f32` / `call_void`) and host import callbacks (`import_module_with`, `HostFn`, `Arg.as_*`,
+`nothing`); the zigcc fix for Zig 0.17.1. Floor vs `v1.1.1` major (`SPEC 3.0.0 -> 4.0.0` + 11
+additions; 16 → 27 symbols). Cut with `bump-version.ts major` (on `release/2.0.0`, `5bdd646`) →
+`--no-ff` merge **`3cfce9a`** → gate on it (suite 87/87, the three adder lines, surface current,
+`compat.ts --release`: major step, exit 0) → `release.ts` (example, suite, `compat --release` again)
+→ **annotated tag `v2.0.0` (`538c053`) → `3cfce9a`, `main` + tag pushed, read back with
+`ls-remote`** (`b12c584..3cfce9a`). `publish.ts --yes` (the VPM no-op) found the tag. **Verified as a
+user:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod` version `2.0.0` at
+`3cfce9a`, the same day. No GitHub Release page: `gh` is not installed here — 🗓️ OWNER.
+⚠️ **Order changed on purpose:** the owner said "push then bump", but before the bump the gate's
+`compat.ts` (report mode) is RED. It runs the previous tag's tests whatever the floor, and v1.1.1's
+`imports_50 … reads_zero` test is the intended break. A red step means no push (INDEX), so the bump
+came first and `release.ts` pushed `main` and the tag together, gated by `compat.ts --release`
+(which skips previous-tag tests for a major step). See compat-gate.md.
+
+**Release state (2026-11-08):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`,
+`v2.0.0` → `3cfce9a`; `v1.0.0` exists only locally (never pushed, see below). From the next bump on,
+Rule 3 runs v2.0.0's 87-assert suite against the new source.
+
+**Superseded — state as of 2026-10-26:** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
+`f5c964d`. `v1.1.1` was the first tag that carried `tests/`.
 
 **Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
 v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
@@ -439,7 +461,8 @@ checked.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
   (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` since 2026-11-08).
-- **No GitHub Release page for `v1.1.1`** (the tag exists) — 🗓️ owner, needs `gh auth login`.
+- **No GitHub Release page for `v1.1.1` or `v2.0.0`** (the tags exist) — 🗓️ owner: `gh` is not
+  installed on this machine (2026-11-08); then `gh auth login` and `gh release create`.
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or
   `--no-build`).
