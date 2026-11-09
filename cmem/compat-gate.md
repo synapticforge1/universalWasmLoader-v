@@ -53,6 +53,16 @@ unchanged since `v1.1.0`; only a doc comment moved). **`v1.1.1` (2026-10-26) is 
 `tests/uwl_test.v`, so Rule 3 now runs:** measured the same day, `compat.ts` → `previous-tag tests
 (v1.1.1 tests/ vs current uwl/): GREEN — 42 asserts passed`; floor vs `v1.1.1` = patch.
 
+**2.0.0 (2026-11-08), the first MAJOR through the gate.** `compat.ts` with no flag (report mode)
+runs the previous tag's tests WHATEVER the floor, and exits 1 when they are red. Between an
+intended break and its bump it is therefore RED by design: here v1.1.1's
+`test_imports_50_without_host_callbacks_reads_zero` (40 / 1). `--release` skips the previous-tag
+tests for a major step and was green (exit 0) on the bumped commit. ⚠️ So for a major, the
+pre-push gate step is `compat.ts --release` on the BUMPED commit; push only after the bump
+(`release.ts` pushes `main` and the tag together). Report mode cannot tell an intended major break
+from a regression. Teaching it the version line (report RED only when the version line's step
+from the last tag is below major) would be a gate change, the owner's call — NOT done.
+
 **Consumers (Rule 3, second half):** none known; wasmtk's H6.5b consumer suites name this repo's
 suite as one to exist.
 
