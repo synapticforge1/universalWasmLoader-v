@@ -25,7 +25,11 @@ the API). A public kind the script cannot key is an error, never skipped. The SP
 from the vendored header's leading comment, exactly once. **16 symbols, SPEC 3.0.0, on 2026-10-26;
 18 symbols, SPEC 4.0.0, since 2026-11-08** (re-baseline alone: `spec 3.0.0 -> 4.0.0`, added
 `call_f32`, `call_void`; nothing removed or changed — `call_f64`'s stricter result is behaviour,
-not surface).
+not surface). **27 symbols the same day** after host callbacks (re-baseline alone: added
+`import_module_with`, `nothing`, the six `Arg.as_*`, `type HostFn`). ⚠️ A type alias is keyed with
+`v doc`'s text, `type HostFn = fn (args []Arg) !Arg`, which INCLUDES the parameter name; renaming
+`args` would read as a change (major). That errs high, the safe side, unlike a function's parameter
+names, which are not surface.
 Not in the surface: the private `C.uwlv_*` FFI block and the `k_*` discriminants (module-private);
 `uwl_shim.{c,h}`; the C header beyond its SPEC line. A change there that alters behaviour is Rule
 3's to catch.
