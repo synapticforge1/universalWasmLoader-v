@@ -177,6 +177,12 @@ Rows of § 8 "Refusals" that need a callback (only `envMul`, callback results, a
 The string-result-import row reports the missing callback (checked first in the C loader) — it
 names `env-mul` before any `.wasm` is read. **Version decision: MAJOR, 2.0.0** (behaviour accepts
 less; the gate floor is major by the SPEC move); bump, push and release are the owner's.
+Commits: `74d61c3` (behaviour + tests + docs), `8f63370` (surface re-baseline alone, 16 → 18).
+**Gate on `8f63370`:** suite GREEN 70/70; example the three adder lines; `surface.ts --check`
+current (18 symbols, SPEC 4.0.0); `compat.ts` floor **major** (`major: SPEC 3.0.0 -> 4.0.0`, two
+`minor: added`) and v1.1.1's own tests on the new code RED 40 / 1 — exactly
+`test_imports_50_without_host_callbacks_reads_zero`, the intended break (Rule 3 binds only a
+patch / minor); `bump major --dry-run` allowed, `bump minor --dry-run` refused (below the floor).
 
 ## How it links
 
