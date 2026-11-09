@@ -38,7 +38,7 @@ const url = `https://github.com/bytecodealliance/wasmtime/releases/download/v${v
 
 /** sha256 of each pinned SDK zip (measured 2026-11-09 for v45.0.2 mingw, the SDK uwl.v links). */
 const PINS: Record<string, string> = {
-  "wasmtime-v45.0.2-x86_64-mingw-c-api": "233ac3d1e961c0b8b7e1726059ed93639c2dcff57732424afe90a809a19f7c2",
+  "wasmtime-v45.0.2-x86_64-mingw-c-api": "233ac3d1e961c0b8b7e1726059ed93639c2dcff57732424afe90a809a19f7c26",
 };
 /** Time limit for one download attempt. */
 const ATTEMPT_MS = 300_000;
