@@ -51,7 +51,7 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   `cmem/` are the JSR scope `@jrmarcum/universal-wasm-loader` in the vendored header, which is
   correct. (The owner removed the README's JSR sentence on GitHub in `61cb1e9`, 2026-10-21.)
 - **Org Actions policy / secrets:** this repo has no CI workflow and no release secret
-  (`release` uses the local `gh`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
+  (`release` pushes with local `git`, and `publish` is a no-op), so unlike `-rs`/`-dart` nothing here
   depends on repo secrets or Actions surviving the transfer. `release.ts` pushes to `origin`, so
   they follow whichever URL `origin` holds.
 
@@ -71,9 +71,10 @@ Working tree (39 tracked files, 2026-10-26):
   wasmtime headers.
 - `uwl/universal_wasm_loader.h` — **vendored copy** of the upstream C single-header loader (keeps its
   upstream filename inside the `uwl/` module dir). Keep in sync with the `universalWasmLoader-c`
-  release being targeted. **Since 2026-11-08: loader-c's `v2.0.0` (SPEC v4.0.0), byte for byte**
-  (`git -C ../universalWasmLoader-c show v2.0.0:universal_wasm_loader.h`, sha256 `5ffa482d…`, the
-  hash loader-zig recorded for its copy). Was loader-c `v1.1.1` (SPEC v3.0.0, `f3af6143…`) on
+  release being targeted. **Since 2026-11-09: loader-c's `v2.1.0` (SPEC v4.0.0 + `uwl_err` /
+  `UWL_ERR`), byte for byte** (`git -C ../universalWasmLoader-c show v2.1.0:universal_wasm_loader.h`,
+  sha256 `01a7ad5e…`; tag `v2.1.0` → `edc6993`, read back with `ls-remote`). From 2026-11-08:
+  `v2.0.0` (`5ffa482d…`, the hash loader-zig recorded for its copy). Was loader-c `v1.1.1` (SPEC v3.0.0, `f3af6143…`) on
   2026-10-26. See "SPEC 4.0.0".
 - `examples/adder.v` — the runnable example (`v run examples/adder.v`); it loads
   `tests/math_50.wasm`. (Its own older `examples/math_50.{wasm,wit}` — wasm bytes not the stamped
@@ -185,13 +186,17 @@ Without a `.wit` the exports are raw and the engine checks them.
   copied), runs the closure, and writes the result `uwlv_arg`; the shim turns it back into a
   `uwl_val_t` (a string is copied). The header's prototype has no `const` on `args`: it must match
   the one V generates (a `const` gave "conflicting types").
-- **Callback errors:** the C API has NO error channel for a callback. On an error, dispatch records
-  `host callback <name> failed: <msg>` (the first per call) in `HostState` and returns -1. The
-  shim then returns `uwl_void()`, which traps an import that has a result. `invoke` clears the state
-  before each call and, if a callback failed, returns ITS message in place of the trap's. ⚠️ **A
-  void import cannot trap through the C API**, so the WASM after it runs on to the end of the export;
-  the error still fails the call (tested). The C side needs a change to fix this: a letter to
-  loader-c (workspace row C39).
+- **Callback errors (since 2026-11-09, loader-c 2.1.0's `uwl_err`, row C39):** dispatch sets the
+  result to kind `k_err` (7, `UWL_ERR`) with the message, and the shim returns `uwl_err(msg)`. The
+  loader traps at the import, VOID imports too, so the WASM stops there. That is tested: a second
+  void import `after` does not run. Dispatch also records `host callback <name> failed: <msg>`
+  (the first per call) in `HostState`, and `invoke` reports THAT text in place of wasmtime's
+  (`<export>: error while executing at wasm backtrace: … Caused by: host callback <name> (WIT
+  import "<wit>") failed: <msg>`, multi-line). This keeps the 2.0.0 wording, which v2.0.0's suite
+  pins: without the override, its two error tests went red under Rule 3, which would have made a
+  patch a break. **History (2.0.0, 2026-11-08):** the C API had no error channel. The shim
+  returned `uwl_void()`, which trapped only an import with a result; after a void import, the WASM
+  ran on to the end of the export before the call failed.
 - **Lifetime:** the C loader keeps only raw pointers, which V's GC cannot see, so every `&HostSlot`
   is rooted in `HostState.slots`, reachable from the `Module`. This is REASONED, not proven by a
   test: with the rooting removed, the suite (including a `gc_collect()` before the call) still
@@ -332,6 +337,14 @@ recorded → exactly the two error-propagation tests red; dispatch always report
 `imports_50` and wrong-kind tests red (`envMul`'s f64 now traps); slots not rooted → still green
 (see "Host import callbacks", Lifetime).
 
+**2026-11-09, loader-c 2.1.0 (`uwl_err`): 21 tests / 89 asserts, all green.** The void-import
+module grew to 76 bytes (hand-assembled again): a second void import, `after`, is called after
+`ping`, and a failing `ping` must leave `after` uncalled. **Inverted:** the shim mapping a V error
+to `uwl_void()` (the 2.0.0 path) → exactly that assertion red (`the WASM ran past the failing
+import`). An intermediate version reported wasmtime's text, and v2.0.0's suite went 2 red under
+`compat.ts`; the 2.0.0 wording was kept, and v2.0.0's 87 asserts are green on the new code (floor
+patch).
+
 ## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
 
 The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run
@@ -358,7 +371,7 @@ the two agree. Windows' 260-character path limit in V's `szip` is the suspected 
 The 2026-10-21 V port's own record (kept as history): same flags, guards, messages and exit codes
 as the shell forms (`2` usage, `1` failed guard, a failing child exits with its code); external
 commands run with argument lists, never through a shell — the TypeScript port keeps all of this.
-Not exercised against GitHub in either port: the `gh release create` path.
+Not exercised against GitHub in either port: the `gh release create` path (removed 2026-11-09).
 
 1. **`scripts/bump-version.ts` `<major|minor|patch>`** — rewrites the `version:` field in
    `v.mod` and commits the isolated bump. Guards: clean tree, strictly-greater target, no pre-existing
@@ -370,8 +383,13 @@ Not exercised against GitHub in either port: the `gh release create` path.
    `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
    `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`) plus `bun scripts/test.ts`, then
    `bun scripts/compat.ts --release` (also under `--dry-run` / `--no-build`), tags `v<version>`, pushes branch + tag to
-   `origin`, and creates the matching **GitHub Release** via `gh` (skippable). Idempotent (reuses a
-   tag only if it points at HEAD; skips an existing Release; degrades if `gh` is unauthenticated).
+   `origin`, and prints the **GitHub Release page as an OWNER item**: the pre-filled web-UI link
+   `https://github.com/<owner>/<repo>/releases/new?tag=…&title=…&body=…`, derived from the remote's
+   URL (`--notes` fills the body; `--no-release` prints nothing). 🔒 **No `gh`** (owner, 2026-11-08;
+   workspace letter H30, Tooling rule 9): until 2026-11-09 this step ran `gh release view` /
+   `gh release create`, and skipped when `gh` was missing. Proven on a scratch clone (version 9.9.9,
+   GitHub remote URL, `--dry-run --no-build --notes "a & b?"`): exit 0, the link printed with the
+   body encoded (`a+%26+b%3F`). Idempotent (reuses a tag only if it points at HEAD).
    Does **not** publish to VPM. `--dry-run` / `--no-release` / `--no-build` / `--remote`.
 3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
@@ -410,8 +428,8 @@ fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut wi
 `main`, which ran the example, the suite (42/42) and `compat.ts --release` (patch step) before it
 tagged. **Annotated tag `v1.1.1` (`e9594a3`) → `f5c964d`, pushed with `main`, read back with
 `ls-remote`;** `publish.ts` found the tag locally and on `origin`; published on VPM (owner),
-verified by an install (see "Repository home"). The GitHub Release page was skipped (`gh` not
-logged in here) — 🗓️ OWNER: `gh release create v1.1.1` after `gh auth login`.
+verified by an install (see "Repository home"). The GitHub Release page was not made — 🗓️ OWNER
+item (GitHub web UI).
 
 **Release 2.0.0 (2026-11-08, owner: "update the project memory files, commit, push then bump and
 release") — a MAJOR:** SPEC 4.0.0 (row C29: the loader-c v2.0.0 header, kind-checked `call_*`,
@@ -423,7 +441,7 @@ additions; 16 → 27 symbols). Cut with `bump-version.ts major` (on `release/2.0
 → **annotated tag `v2.0.0` (`538c053`) → `3cfce9a`, `main` + tag pushed, read back with
 `ls-remote`** (`b12c584..3cfce9a`). `publish.ts --yes` (the VPM no-op) found the tag. **Verified as a
 user:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod` version `2.0.0` at
-`3cfce9a`, the same day. No GitHub Release page: `gh` is not installed here — 🗓️ OWNER.
+`3cfce9a`, the same day. The GitHub Release page was not made — 🗓️ OWNER item (GitHub web UI).
 ⚠️ **Order changed on purpose:** the owner said "push then bump", but before the bump the gate's
 `compat.ts` (report mode) is RED. It runs the previous tag's tests whatever the floor, and v1.1.1's
 `imports_50 … reads_zero` test is the intended break. A red step means no push (INDEX), so the bump
@@ -452,17 +470,18 @@ checked.
   is REFUSED at load**, naming every missing callback.
 - ~~No `call_f32`~~ — added 2026-11-08.
 - ~~Host import callbacks are not exposed from V~~ — **added 2026-11-08** (`import_module_with`).
-- **A failing callback for a VOID import cannot stop the WASM after it** (the C API has no error
-  channel; "Host import callbacks"). The error still fails the export call. Waits on loader-c
-  (row C39).
+- ~~A failing callback for a VOID import cannot stop the WASM after it~~ — **fixed 2026-11-09**
+  with loader-c 2.1.0's `uwl_err` (row C39; "Host import callbacks").
 - **GC rooting of the callbacks is untested** (reasoned only; see "Host import callbacks").
 - **String/aggregate args beyond flat scalars + strings** rely entirely on the C loader; there is no
   V-side validation beyond the `Arg` builder `kind` tags.
 - **Vendored header drift:** `uwl/universal_wasm_loader.h` is a manual copy of upstream
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
-  (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` since 2026-11-08).
-- **No GitHub Release page for `v1.1.1` or `v2.0.0`** (the tags exist) — 🗓️ owner: `gh` is not
-  installed on this machine (2026-11-08); then `gh auth login` and `gh release create`.
+  (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` on 2026-11-08; to -c `v2.1.0` since
+  2026-11-09).
+- 🗓️ **OWNER item: GitHub Release pages for `v1.1.1` and `v2.0.0`** (the tags exist). It is a
+  GitHub web-UI task, not something a script here does (no `gh`, H30): open
+  `https://github.com/synapticforge1/universalWasmLoader-v/releases/new?tag=v2.0.0`.
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or
   `--no-build`).

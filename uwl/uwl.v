@@ -35,6 +35,7 @@ const k_f32 = 3 // 32-bit float (WIT f32)
 const k_f64 = 4 // 64-bit float (WIT f64)
 const k_bool = 5 // boolean
 const k_str = 6 // UTF-8 string
+const k_err = 7 // a host callback's failure; `s` is the message (loader-c 2.1.0 `UWL_ERR`)
 
 // kind_name is the WIT name of a k_* discriminant, as the C loader spells it in
 // its own messages (`uwl__kind_name`). (Internal.)
@@ -47,6 +48,7 @@ fn kind_name(k int) string {
 		k_f64 { 'f64' }
 		k_bool { 'bool' }
 		k_str { 'string' }
+		k_err { 'error' }
 		else { 'kind ${k}' }
 	}
 }
@@ -232,7 +234,8 @@ pub fn (a Arg) as_str() !string {
 // no result. The kind must BE the import's result kind — the loader never
 // coerces; another kind fails the export call that reached the import, naming
 // the callback, the import, the type and the value. An error the callback
-// returns fails that export call with `host callback <name> failed: <msg>`.
+// returns stops the WASM at that import (void imports too) and fails the export
+// call with `host callback <name> failed: <msg>`.
 pub type HostFn = fn (args []Arg) !Arg
 
 // HostState is what a Module's callbacks share: the slots (kept here so V's
@@ -256,12 +259,12 @@ struct HostSlot {
 
 // host_dispatch is called from C (the shim's import trampoline) for every
 // import call: it decodes the arguments, runs the V callback and encodes its
-// value. On a callback error it records the message (the first per call) and
-// returns -1; the shim then returns void, which traps an import that has a
-// result. A void import cannot trap through the C API, so WASM continues — the
-// recorded error still fails the export call when it returns. (Internal.)
+// value. A callback error goes back as kind k_err carrying the message; the
+// shim turns it into the loader's `uwl_err`, which traps at the import. The
+// message is also recorded, so invoke() reports it in 2.0.0's wording instead
+// of wasmtime's multi-line trap text. (Internal.)
 @[export: 'uwlv_host_dispatch']
-fn host_dispatch(ctx voidptr, args &C.uwlv_arg, n usize, mut out C.uwlv_arg) int {
+fn host_dispatch(ctx voidptr, args &C.uwlv_arg, n usize, mut out C.uwlv_arg) {
 	slot := unsafe { &HostSlot(ctx) }
 	mut vargs := []Arg{cap: int(n)}
 	for idx in 0 .. int(n) {
@@ -278,18 +281,22 @@ fn host_dispatch(ctx voidptr, args &C.uwlv_arg, n usize, mut out C.uwlv_arg) int
 		}
 	}
 	r := slot.f(vargs) or {
+		// The message is borrowed until the shim copies it (uwl_err) in the
+		// same C frame, which keeps the pointer visible to V's GC.
+		msg := err.msg()
 		mut st := slot.state
 		if !st.failed {
 			st.failed = true
-			st.err = 'host callback ${slot.name} failed: ${err.msg()}'
+			st.err = 'host callback ${slot.name} failed: ${msg}'
 		}
-		return -1
+		out.kind = k_err
+		out.s = &char(msg.str)
+		return
 	}
 	out.kind = r.kind
 	out.i = r.i
 	out.d = r.d
 	out.s = if r.kind == k_str { &char(r.s.str) } else { &char(unsafe { nil }) }
-	return 0
 }
 
 // Module is a loaded, ABI-translated WASM module. Obtain one from
@@ -419,9 +426,8 @@ fn (m &Module) invoke(name string, args []Arg) !(int, i64, f64, string) {
 	st.err = ''
 	rc := C.uwlv_call(m.handle, &char(name.str), data, usize(args.len), &out_kind, &out_i, &out_d,
 		&out_s, &err)
-	// A callback's own error outranks the trap it caused (the loader's message
-	// would say the callback "returned void"); after a void import it is the
-	// only sign of the failure.
+	// A callback's own error outranks the trap text it caused (wasmtime's
+	// "error while executing at wasm backtrace: … Caused by: …").
 	if st.failed {
 		if rc != 0 {
 			take_err(err, '')

@@ -394,8 +394,9 @@ fn test_a_callback_result_of_the_wrong_kind_is_refused() {
 	}
 }
 
-// A callback's own error reaches the caller of the export that called the
-// import, in place of the trap it caused; the next call starts clean.
+// A callback's own error traps at the import (loader-c 2.1.0 `uwl_err`) and
+// reaches the caller of the export as `host callback <name> failed: <msg>` (the
+// 2.0.0 wording, kept; v2.0.0's suite pins it); the next call starts clean.
 fn test_a_callback_error_reaches_the_export_caller() {
 	m := uwl.import_module_with(fixture('imports_50.wasm'), with_env_add(fn (a []uwl.Arg) !uwl.Arg {
 		x := a[0].as_i32()!
@@ -427,32 +428,39 @@ fn test_a_callback_error_reaches_the_export_caller() {
 	}
 }
 
-// No stamped fixture has a void import, so this hand-assembled 59-byte module
+// No stamped fixture has a void import, so this hand-assembled 76-byte module
 // is written beside its `.wit` in a scratch dir:
 //   (import "env" "ping" (func (param i32)))
-//   (func (export "run") (param i32) (result i32) local.get 0 call 0 i32.const 1)
-const ping_wasm = [u8(0x00), 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0a, 0x02, 0x60,
-	0x01, 0x7f, 0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x02, 0x0c, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x04,
-	0x70, 0x69, 0x6e, 0x67, 0x00, 0x00, 0x03, 0x02, 0x01, 0x01, 0x07, 0x07, 0x01, 0x03, 0x72, 0x75,
-	0x6e, 0x00, 0x01, 0x0a, 0x0a, 0x01, 0x08, 0x00, 0x20, 0x00, 0x10, 0x00, 0x41, 0x01, 0x0b]
+//   (import "env" "after" (func))
+//   (func (export "run") (param i32) (result i32)
+//     local.get 0  call 0  call 1  i32.const 1)
+const ping_wasm = [u8(0x00), 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, // magic, version
+ 0x01, 0x0d, 0x03, 0x60, 0x01, 0x7f, 0x00, 0x60, 0x00, 0x00, 0x60, 0x01, 0x7f, 0x01, 0x7f, // types
+ 0x02, 0x18, 0x02, 0x03, 0x65, 0x6e, 0x76, 0x04, 0x70, 0x69, 0x6e, 0x67, 0x00, 0x00, 0x03, 0x65,
+	0x6e, 0x76, 0x05, 0x61, 0x66, 0x74, 0x65, 0x72, 0x00, 0x01, // imports env.ping, env.after
+	 	0x03, 0x02, 0x01, 0x02, // function: run has type 2
+	 	0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x02, // export "run" = func 2
+	 	0x0a, 0x0c, 0x01, 0x0a, 0x00, 0x20, 0x00, 0x10, 0x00, 0x10, 0x01, 0x41, 0x01, 0x0b] // code
 
 struct Seen {
 mut:
 	calls []int
+	after int
 }
 
-// A void import: a closure callback sees each argument and returns nothing().
-// The C API gives a void import no way to trap, so a failing callback lets WASM
-// finish — but the export call still fails with the callback's error.
-fn test_a_void_import_callback_runs_and_its_error_still_fails_the_call() {
-	assert ping_wasm.len == 59
+// Void imports: closure callbacks see each argument and return nothing(). A
+// failing `ping` stops the WASM AT the import (loader-c 2.1.0 `uwl_err`; before
+// it the WASM ran on to the end), so `after` does not run, and the export call
+// fails with the callback's message.
+fn test_a_void_import_callback_error_stops_the_wasm_at_the_import() {
+	assert ping_wasm.len == 76
 	d := scratch('ping')
 	defer {
 		os.rmdir_all(d) or {}
 	}
 	os.write_file_array(os.join_path(d, 'ping.wasm'), ping_wasm)!
 	os.write_file(os.join_path(d, 'ping.wit'),
-		'world ping {\n  import ping: func(n: s32);\n  export run: func(n: s32) -> s32;\n}\n')!
+		'world ping {\n  import ping: func(n: s32);\n  import after: func();\n  export run: func(n: s32) -> s32;\n}\n')!
 	mut seen := &Seen{}
 	mut cbs := map[string]uwl.HostFn{}
 	cbs['ping'] = fn [mut seen] (a []uwl.Arg) !uwl.Arg {
@@ -463,6 +471,10 @@ fn test_a_void_import_callback_runs_and_its_error_still_fails_the_call() {
 		seen.calls << n
 		return uwl.nothing()
 	}
+	cbs['after'] = fn [mut seen] (a []uwl.Arg) !uwl.Arg {
+		seen.after++
+		return uwl.nothing()
+	}
 	m := uwl.import_module_with(os.join_path(d, 'ping.wasm'), cbs)!
 	defer {
 		m.free()
@@ -470,10 +482,12 @@ fn test_a_void_import_callback_runs_and_its_error_still_fails_the_call() {
 	assert m.call_i32('run', uwl.i32(5))! == 1
 	assert m.call_i32('run', uwl.i32(8))! == 1
 	assert seen.calls == [5, 8]
+	assert seen.after == 2
 	if _ := m.call_i32('run', uwl.i32(-3)) {
 		assert false, 'a failing void-import callback went unreported'
 	} else {
 		assert err.msg() == 'host callback ping failed: negative -3', err.msg()
 	}
 	assert seen.calls == [5, 8]
+	assert seen.after == 2, 'the WASM ran past the failing import'
 }
