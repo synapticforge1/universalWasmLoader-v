@@ -15,7 +15,7 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks), **2.0.1** since 2026-11-09 (loader-c 2.1.0's `uwl_err`; on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks), **2.0.1** (loader-c 2.1.0's `uwl_err`) and **2.0.2** (the CI release workflow) since 2026-11-09 (on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
@@ -45,6 +45,7 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   version field; the install is the check. **2026-11-08: 2.0.0 is what users get** — the same
   install gave `v.mod` version `2.0.0` at `3cfce9a` (`v2.0.0`'s commit), minutes after the push.
   **2026-11-09: 2.0.1** — `v.mod` 2.0.1 at `03307ac` (`v2.0.1`'s commit), minutes after the push.
+  **Same day, 2.0.2** — `v.mod` 2.0.2 at `df6ebbe` (`v2.0.2`'s commit), `.github/` included.
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
@@ -430,9 +431,14 @@ Not exercised against GitHub in either port: the `gh release create` path (remov
      pins that had lost their last hex digit: `sha256sum` printed a leading `\` (escaped path) and
      `cut -c1-64` kept it. Re-measured from stdin. **Real GitHub, read-only `--dry-run`, no token
      (2026-11-09):** `v2.0.1` at `03307ac` → the annotated tag peeled, no page → "would POST", exit
-     0; the same tag at 2.0.0's `3cfce9a` → refused, exit 1. **Not yet proven on GitHub:** the first push to
-     `main` runs `checks`; the first new tag runs `release`, whose page's `author.login` should be
-     `github-actions[bot]` (H32 asks for it in the ledger row).
+     0; the same tag at 2.0.0's `3cfce9a` → refused, exit 1. **PROVEN ON GITHUB (2026-11-09):**
+     the push of `main` `aace4e6` ran **42652413051**, where `checks` went green (every step:
+     pinned installs, wasmtime pin, suite, example, surface, compat) and `release` was skipped, as
+     designed. Tag `v2.0.2` ran **42653181536**, with `checks` and then `release` green; its
+     "Create the GitHub Release page" step made the page. Read back through the public REST API:
+     `v2.0.2`, author **`github-actions[bot]`**, not a draft, `releases/latest` = v2.0.2, the
+     VPM line on top of the generated notes, and the tag unmoved (`v2.0.2^{}` = `df6ebbe`). Each
+     run took about 3–4 minutes. Watched with a one-time poller on the Actions REST API (no `gh`).
 3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
    CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
    https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
@@ -505,11 +511,25 @@ allows for a patch: full gate on `5bef88a` (89/89, the three adder lines, surfac
 gave `v.mod` 2.0.1 at `03307ac`, with `uwl_err` in the shim. No Release page (owner, 2026-11-09:
 "only new tags will get release pages"; CI makes them from the next tag).
 
-**Release state (2026-11-09):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`,
-`v2.0.0` → `3cfce9a`, `v2.0.1` → `03307ac`; `v1.0.0` exists only locally (never pushed, see below).
-From the next bump on, Rule 3 runs v2.0.1's 89-assert suite against the new source.
+**Release 2.0.2 (2026-11-09, owner: "update the project memory files, commit, push and release")
+— a PATCH:** the CI release workflow (H32), the Bun 1.4.4 pins (H31), `fetch-wasmtime.ts`'s
+sha256 pin and time limit, and `release.ts`'s push read-back; `uwl/` unchanged since v2.0.1 (floor
+patch, v2.0.1's 89 asserts green). Order: full gate on `aace4e6` → `main` pushed
+(`6446438..aace4e6`) → **CI `checks` watched GREEN on GitHub (run 42652413051) before the bump**
+→ `bump-version.ts patch` on `release/2.0.2` (`72f39a7`) → `--no-ff` merge **`df6ebbe`** →
+`release.ts` (example, 89/89, `compat --release` patch step), annotated tag **`v2.0.2`
+(`91f4907`) → `df6ebbe`**, `main` + tag pushed. Its first real read-back printed `main =
+v2.0.2^{} = df6ebbe`. The tag run 42653181536 (`checks` → `release`) made the **first CI Release
+page, author `github-actions[bot]`**. `publish.ts --yes` found the tag; a scratch VPM install gave
+2.0.2 at `df6ebbe`.
 
-**Superseded — state as of 2026-11-08:** the same without `v2.0.1`; Rule 3 ran v2.0.0's 87 asserts.
+**Release state (2026-11-09, after 2.0.2):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
+`f5c964d`, `v2.0.0` → `3cfce9a`, `v2.0.1` → `03307ac`, `v2.0.2` → `df6ebbe` (the only one with a
+Release page; older tags stay without one, owner); `v1.0.0` exists only locally (never pushed).
+From the next bump on, Rule 3 runs v2.0.2's 89-assert suite against the new source.
+
+**Superseded — state as of 2026-11-09, before 2.0.2:** the same without `v2.0.2`. **As of
+2026-11-08:** also without `v2.0.1`; Rule 3 ran v2.0.0's 87 asserts.
 
 **Superseded — state as of 2026-10-26:** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
 `f5c964d`. `v1.1.1` was the first tag that carried `tests/`.
@@ -541,8 +561,8 @@ checked.
 - ~~OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0`, `v2.0.1`~~ — **DECIDED, owner
   2026-11-09: "only new tags will get release pages"**; these tags stay without one. New tags get
   theirs from CI (see "CI release workflow").
-- **The CI workflow is unproven on GitHub** until the first push to `main` (`checks`) and the
-  first new tag (`release`); proven locally only (see "CI release workflow").
+- ~~The CI workflow is unproven on GitHub~~ — **proven 2026-11-09** (runs 42652413051 and
+  42653181536; v2.0.2's page by `github-actions[bot]`).
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
   `zigcc` wrapper) or MinGW gcc. The `release` build step depends on one being available (or
   `--no-build`).
