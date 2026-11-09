@@ -15,7 +15,7 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks; on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks), **2.0.1** since 2026-11-09 (loader-c 2.1.0's `uwl_err`; on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
@@ -44,6 +44,7 @@ including the upstream `synapticforge1/universalWasmLoader-c`. The JSR reference
   version `1.1.1` at `f5c964d` (the `v1.1.1` tag's commit), `tests/` included. VPM's API carries no
   version field; the install is the check. **2026-11-08: 2.0.0 is what users get** — the same
   install gave `v.mod` version `2.0.0` at `3cfce9a` (`v2.0.0`'s commit), minutes after the push.
+  **2026-11-09: 2.0.1** — `v.mod` 2.0.1 at `03307ac` (`v2.0.1`'s commit), minutes after the push.
 - **Links updated (2026-10-21):** the local `origin` remote now points to
   `https://github.com/synapticforge1/universalWasmLoader-v.git`, and `git fetch` from it works.
   `README.md` and `CLAUDE.md` link the `-c` loader at `synapticforge1/universalWasmLoader-c`. The
@@ -448,9 +449,25 @@ user:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod` vers
 came first and `release.ts` pushed `main` and the tag together, gated by `compat.ts --release`
 (which skips previous-tag tests for a major step). See compat-gate.md.
 
-**Release state (2026-11-08):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`,
-`v2.0.0` → `3cfce9a`; `v1.0.0` exists only locally (never pushed, see below). From the next bump on,
-Rule 3 runs v2.0.0's 87-assert suite against the new source.
+**Release 2.0.1 (2026-11-09, owner: "go" after the C39 / H30 report) — a PATCH:** loader-c
+v2.1.0 header + `uwl_err` (a failing callback stops the WASM at the import, void ones too; C39);
+`release.ts` / `bump-version.ts` without the GitHub CLI (H30). Floor vs `v2.0.0` patch (surface
+unchanged, 27 symbols); v2.0.0's own 87 asserts green on the new code. Order as the owner's rule
+allows for a patch: full gate on `5bef88a` (89/89, the three adder lines, surface current,
+`compat.ts` GREEN) → `main` pushed (`0d81e4a..5bef88a`) → `bump-version.ts patch` on
+`release/2.0.1` (`56217e2`) → `--no-ff` merge **`03307ac`** → `release.ts --dry-run`, then
+`release.ts` (example, 89/89, `compat --release` patch step with v2.0.0's tests GREEN) →
+**annotated tag `v2.0.1` (`ef2299a`) → `03307ac`, `main` + tag pushed, read back with
+`ls-remote`**. The new owner-item path printed the Release page link (its first real run).
+`publish.ts --yes` found the tag. **Verified as a user:** a scratch `v install synapticforge1.uwl`
+gave `v.mod` 2.0.1 at `03307ac`, with `uwl_err` in the shim. 🗓️ OWNER: the GitHub Release page
+(`…/releases/new?tag=v2.0.1`).
+
+**Release state (2026-11-09):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` → `f5c964d`,
+`v2.0.0` → `3cfce9a`, `v2.0.1` → `03307ac`; `v1.0.0` exists only locally (never pushed, see below).
+From the next bump on, Rule 3 runs v2.0.1's 89-assert suite against the new source.
+
+**Superseded — state as of 2026-11-08:** the same without `v2.0.1`; Rule 3 ran v2.0.0's 87 asserts.
 
 **Superseded — state as of 2026-10-26:** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
 `f5c964d`. `v1.1.1` was the first tag that carried `tests/`.
@@ -479,7 +496,7 @@ checked.
   `universalWasmLoader-c`; there is no automated sync — bump it deliberately per targeted release
   (identical to -c `v1.1.1` on 2026-10-26; to -c `v2.0.0` on 2026-11-08; to -c `v2.1.0` since
   2026-11-09).
-- 🗓️ **OWNER item: GitHub Release pages for `v1.1.1` and `v2.0.0`** (the tags exist). It is a
+- 🗓️ **OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0` and `v2.0.1`** (the tags exist). It is a
   GitHub web-UI task, not something a script here does (no `gh`, H30): open
   `https://github.com/synapticforge1/universalWasmLoader-v/releases/new?tag=v2.0.0`.
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
