@@ -27,8 +27,9 @@ A committed script kept for repeated use is **TypeScript run by Bun** (`bun scri
 `v run` / `.vsh` compile a native executable, so V falls back to Bun (the floor's per-language
 table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 - The four `.vsh` were ported 2026-10-26 and deleted after an output-diff proved each port
-  equivalent ([overview.md](overview.md) § "Release / publish flow"). `scripts/_lib.ts` holds
-  shared helpers (not a script itself).
+  equivalent ([overview.md](overview.md) § "Release / publish flow"). `scripts/_lib.ts` and
+  `scripts/_github.ts` (the REST helpers of the release workflow) hold shared code; neither is a
+  script itself.
 - **`scripts/zigcc.v` is part of the build, not a script** (floor: "a source file the BUILD compiles
   and runs is part of the build", owner 2026-10-23): V invokes it as its C compiler through
   `-cc <path>`, so it must be an executable; `release.ts` / `test.ts` build it on first use.
@@ -45,15 +46,22 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 - **When the exit code IS the measurement, do not pipe** it; redirect, then read `exit=$?`.
 - **Line endings are LF, pinned in `.gitattributes`** wildcard-first (since 2026-10-26); the `.wit`
   / `.wat` / `.json` fixtures feed a sha256 stamp. Never "fix" endings with `git config`.
-- **Nothing is pushed, tagged or published unless the owner says so.** `release.ts` pushes and tags;
-  `publish.ts` is a no-op for VPM.
+- **Nothing is pushed, tagged or published unless the owner says so** — in the owner's words
+  (H34, [working-rules.md](working-rules.md)): "commit" = memory, then commit to the working branch;
+  "push" = commit, merge into `main`, push; "release" = push, then the release process. Each
+  includes the one before; none goes further. ⚠️ **VPM installs `main`** (measured 2026-11-10), so
+  every push to `main` reaches users — the gate before every push (below) is what guards them.
+- 🔒 **Releases in the owner's order (2026-11-10, H33): CI checks → CI pushes the tag → the Release
+  page from the tag → the publish** (for VPM: the read-back as a user, in CI). `release.ts` pushes
+  `main` only and NEVER tags; never `git tag -f`, never a moved tag. Process and every release:
+  [release.md](release.md).
 - 🔒 **No `gh`** (owner, 2026-11-08; workspace letter H30, Tooling rule 9): check GitHub with `git`
   itself (`git ls-remote origin`, `git fetch`) and VPM with an install. A GitHub web-UI task (a
   Release page) is an OWNER item, never "blocked on gh".
 - 🔒 **Release pages are made by CI, never by hand** (owner, 2026-11-09, workspace H32 / C41: "they
   both need the CI and release pages, not by hand"; "only new tags will get release pages"):
-  a `v*` tag push runs `.github/workflows/release.yml` — `checks` (the gate, windows-latest), then
-  `release` (`scripts/github-release.ts`, REST API). Old tags (v1.1.0 … v2.0.1) stay without pages.
+  `.github/workflows/release.yml`'s `release` job (`scripts/github-release.ts`, REST API), after CI's
+  `tag` job. Old tags (v1.1.0 … v2.0.1) stay without pages.
 - 🔒 **Every Bun-version notation is the latest installed Bun** (owner, 2026-11-09; workspace H31,
   Tooling rule 10): 1.4.4 today. The pins in `release.yml` (`BUN_VERSION` + the Windows and Linux
   sha256) move together, from Bun's SHASUMS256.txt, at the session after the owner installs a newer
@@ -114,7 +122,8 @@ table). Scripts use `node:*`, web APIs and `Bun.*` — never `Deno.*` or `jsr:`.
 
 | File | What it holds |
 | --- | --- |
-| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.2 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, release flow + state (2.0.2 released 2026-11-09), the CI release workflow (H32: checks + Release page; proven on GitHub with v2.0.2), known gaps |
+| [overview.md](overview.md) | What the port is, repo home + VPM (2.0.2 the latest, install-verified 2026-11-09), layout, API, linking, build/run, SPEC 4.0.0 (2026-11-08, C29), host import callbacks (2026-11-08), tests, the scripts (releases moved to release.md), known gaps |
+| [release.md](release.md) | 🔒 THE release record (owner, 2026-11-10, H33 D3): the process in the owner's order (CI checks → CI tag → page → VPM read-back; U1–U12), its proofs, and § "Release History" newest first (2.0.2 … 1.0.0, a summary each) |
 | [compat-gate.md](compat-gate.md) | The compatibility gate: surface from `v doc` → `api-surface.txt`, the floor, previous-tag tests (live since `v1.1.1`); 2.0.0 (first major: report mode red by design) and 2.0.1 (Rule 3 caught a message change); its inversion |
-| [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception) |
+| [working-rules.md](working-rules.md) | Repo-local rules over the workspace floor: privacy (path test, binary scans, the maintainer-email exception); the owner's "commit" / "push" / "release" (H34, written by the workspace 2026-11-10) |
 | [best-practices.md](best-practices.md) | Method: this repo's § L rules (L1–L2) + the workspace's 28 ★ rules, copied verbatim under a dated stamp |

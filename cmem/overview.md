@@ -15,7 +15,7 @@ module) on top.
   [wasmtime C API](https://docs.wasmtime.dev/c-api/) (**v45.0.2**) as the WASM engine.
 - **What it gives V callers:** native V argument/result values, `!`/`or` result-based error handling
   (no out-params surfaced to V), and a small typed call surface — no manual `uwl_val_t` boxing.
-- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks), **2.0.1** (loader-c 2.1.0's `uwl_err`) and **2.0.2** (the CI release workflow) since 2026-11-09 (on VPM, install-verified) — see "Release / publish flow", MIT) published via **VPM** (the V package
+- **Distribution:** a V module (`v.mod` name `uwl`, **1.1.1** since 2026-10-26, **2.0.0** since 2026-11-08 (SPEC 4.0.0 + host callbacks), **2.0.1** (loader-c 2.1.0's `uwl_err`) and **2.0.2** (the CI release workflow) since 2026-11-09 (on VPM, install-verified) — every release in [release.md](release.md), MIT) published via **VPM** (the V package
   manager, https://vpm.vlang.io). The MIT `LICENSE` file ships with the repo; README's License section
   links it. **Naming note:** the VPM registry name MUST be letters/digits/dots only (no underscores,
   2–35 chars; see `is_valid_mod_name` in `vlang/vpm`), so the package is `uwl` (full registry name
@@ -92,7 +92,7 @@ Working tree (39 tracked files, 2026-10-26; still 39 on 2026-11-09):
 - `scripts/zigcc.v` — the Zig-as-C-compiler tool, built to `scripts/zigcc.exe` (gitignored; see
   "How it links"). A build tool, not a script (INDEX Policy).
 - `scripts/bump-version.ts` / `release.ts` / `publish.ts` (+ `_lib.ts` helpers) — the release
-  toolchain (see "Release / publish flow"). TypeScript on Bun, one form each (INDEX Policy).
+  toolchain ([release.md](release.md)). TypeScript on Bun, one form each (INDEX Policy).
 - `scripts/test.ts` (the suite runner), `scripts/surface.ts` + committed `api-surface.txt`,
   `scripts/compat.ts` — the compatibility gate ([compat-gate.md](compat-gate.md)).
 - `.gitattributes` — LF pinned wildcard-first; the `.wit` / `.wat` / `.json` fixtures feed the
@@ -227,7 +227,7 @@ Rows of § 8 "Refusals" that need a callback (only `envMul`, callback results, a
 The string-result-import row reports the missing callback (checked first in the C loader) — it
 names `env-mul` before any `.wasm` is read. **Version decision: MAJOR, 2.0.0** (behaviour accepts
 less; the gate floor is major by the SPEC move) — **RELEASED 2026-11-08** (tag `v2.0.0` →
-`3cfce9a`; see "Release / publish flow").
+`3cfce9a`; see [release.md](release.md)).
 Commits: `74d61c3` (behaviour + tests + docs), `8f63370` (surface re-baseline alone, 16 → 18).
 **Gate on `8f63370`:** suite GREEN 70/70; example the three adder lines; `surface.ts --check`
 current (18 symbols, SPEC 4.0.0); `compat.ts` floor **major** (`major: SPEC 3.0.0 -> 4.0.0`, two
@@ -357,188 +357,31 @@ import`). An intermediate version reported wasmtime's text, and v2.0.0's suite w
 `compat.ts`; the 2.0.0 wording was kept, and v2.0.0's 87 asserts are green on the new code (floor
 patch).
 
-## Release / publish flow (AUTHORED 2026-06-19; V 2026-10-21; TypeScript on Bun 2026-10-26)
+## Release / publish flow → [release.md](release.md)
 
-The version in `v.mod` (the `version:` field) is the **single source of truth**. Three scripts, run
-in order (`bun scripts/<name>.ts`, each takes `--help`), keep the git tag, GitHub Release, and VPM
-listing consistent with it.
+🔒 **Every release, the process and the history, lives in [release.md](release.md)** (owner,
+2026-11-10, workspace H33 D3: one place, `cmem/release.md` § "Release History", newest first).
+Moved there 2026-11-10 from this section: the per-release records (1.0.0 … 2.0.2), the release
+state, and the CI workflow's description and proofs. The scripts, in one line each:
 
-**Port to Bun (2026-10-26, workspace letter H15).** The four `.vsh` were ported to TypeScript and
-deleted only after an output-diff proved each port equivalent: a one-time harness ran the `.vsh` and
-the `.ts` on the same inputs, each in a fresh throwaway clone at the same path with a local bare
-remote, and compared exit code, stdout, stderr and the resulting state (`v.mod`, last 3 commit
-subjects, `git status`, local tags, the bare remote's refs; for fetch, every extracted file's
-sha256). **42 cases, 42 identical**: bump 16 (help, usage errors, explicit X.Y.Z, not-greater, dry
-runs, a real commit, `--no-commit`, dirty tree, existing tag, bad current version), release 11
-(usage errors, dirty, tag not at HEAD, dry runs with and without `-cc` in `VFLAGS`, a real tag +
-push, tag reuse, unknown remote, a real build that compiled `zigcc.exe` and ran the example),
-publish 12 (every guard, `--dry-run` downgrades, `--skip-tag-check`, unknown remote), fetch 3
-(unsupported platform, already present, a real download: both trees sha256-identical).
-Normalized before comparing: `v run scripts/X.vsh` ↔ `bun scripts/X.ts` in messages, and commit /
-tag ids that the setup commits' timestamps change. **Inverted:** one exit code changed in a scratch
-copy of the bump port → exactly the 2 cases that reach it reported DIFF.
-⚠️ Found on the way: under a ~200-character base path the `.vsh` fetch failed (`cannot extract
-…zip`, exit 1) after writing part of the tree, where the port extracted everything; at a short base
-the two agree. Windows' 260-character path limit in V's `szip` is the suspected layer — UNVERIFIED.
-The 2026-10-21 V port's own record (kept as history): same flags, guards, messages and exit codes
-as the shell forms (`2` usage, `1` failed guard, a failing child exits with its code); external
-commands run with argument lists, never through a shell — the TypeScript port keeps all of this.
-Not exercised against GitHub in either port: the `gh release create` path (removed 2026-11-09).
+1. **`scripts/bump-version.ts <major|minor|patch>`** — the level is a required argument; the gate
+   (floor, previous-tag tests; [compat-gate.md](compat-gate.md)); commits `bump to vX.Y.Z`.
+2. **`scripts/release.ts`** — guards, the cold gate, then pushes **`main` only** and reads it back;
+   CI tags (since 2026-11-10, the owner's order).
+3. **`scripts/github-tag.ts`** / **`scripts/github-release.ts`** (shared `scripts/_github.ts`) — run
+   by `.github/workflows/release.yml`: CI's tag, then the Release page from it.
+4. **`scripts/publish.ts`** — the VPM no-op (registration was one-time; VPM installs `main`).
 
-1. **`scripts/bump-version.ts` `<major|minor|patch>`** — rewrites the `version:` field in
-   `v.mod` and commits the isolated bump. Guards: clean tree, strictly-greater target, no pre-existing
-   tag, valid semver, and (since 2026-10-26) the compatibility gate — [compat-gate.md](compat-gate.md):
-   current `api-surface.txt`, a bump not below the floor, the previous tag's tests green for a
-   patch/minor. The explicit `X.Y.Z` form was dropped then (workspace SemVer rule). `--dry-run` /
-   `--no-commit`.
-2. **`scripts/release.ts`** — reads `version:` from `v.mod`, verifies a clean tree + a fresh
-   `v run examples/adder.v` build (honours `$VFLAGS` if it already sets `-cc`, else builds
-   `scripts/zigcc.exe` if missing and uses it when `zig` is on `PATH`) plus `bun scripts/test.ts`, then
-   `bun scripts/compat.ts --release` (also under `--dry-run` / `--no-build`), tags `v<version>`, pushes branch + tag to
-   `origin`, **reads the push back** (`ls-remote`: the branch and `<tag>^{}` must both be HEAD,
-   else exit 1; H32), and prints where the Release page will appear
-   (`…/releases/tag/<tag>`): **the tag push runs `.github/workflows/release.yml`, which makes the
-   page** (see "CI release workflow"). Idempotent (reuses a tag only if it points at HEAD). Does
-   **not** publish to VPM. `--dry-run` / `--no-build` / `--remote`. History: until 2026-11-09 this
-   step ran `gh release view` / `create` (skipped without `gh`); 2026-11-09 (2.0.1) it printed the
-   pre-filled `releases/new` link as an owner item (`--notes`, `--no-release`; both dropped when CI
-   took the page over).
-2a. **CI release workflow, `.github/workflows/release.yml` (2026-11-09; workspace H32 / C41, owner:
-   "they both need the CI and release pages, not by hand").** Triggers: a `v*` tag push (both jobs)
-   and a push to `main` (`checks` only, so the CI gate is proven before a release relies on it). No
-   `workflow_dispatch`: owner, same day, "only new tags will get release pages" (no backfill).
-   - `checks` (windows-latest, Git Bash, `contents: read`, tokenless full clone): installs Bun 1.4.4,
-     Zig 0.17.1 and V 0.5.2 (= `7647ce1`) from their official zips, each pinned by version AND
-     sha256 (Bun from its SHASUMS256.txt, matching loader-go's Linux pin; Zig from
-     ziglang.org's index.json; V's `v_windows.zip` hashed here, and its `v.exe` reports `0.5.2
-     7647ce1`); then `fetch-wasmtime.ts`, the suite, the example (each adder line matched exactly),
-     `surface.ts --check`, and `compat.ts --release` on a tag / report mode on `main`.
-   - `release` (tags only, `needs: checks`, ubuntu, `contents: write` only): tokenless clone of the
-     tag, which must be the commit `checks` passed; pinned Linux Bun; `scripts/github-release.ts`.
-   - `scripts/github-release.ts` (REST API, `GITHUB_TOKEN`, 30 s per call): (1) the tag exists on
-     GitHub and peels to that commit — else refuse, because `POST /releases` would CREATE a missing
-     tag; (2) an existing page = done, no write; (3) POST (`generate_release_notes` under a VPM
-     install line), read back (tag, not draft), re-check the tag. `--dry-run`.
-   - **Proof (2026-11-09, local):** a one-time mock-API harness, 12 cases all PASS: lightweight /
-     annotated tag → POST; tag missing / at another commit → refused, no POST; page exists, dry-run →
-     no write; POST 422, read-back draft, no token, tag moved during the write, unknown argument →
-     exit 1; an API that never answers → exit 1 after ~1 s with `GITHUB_API_TIMEOUT_MS=1000`.
-     Mutants: skip the first tag check → only "another commit" red (it POSTed); skip the
-     existing-page stop → only "page exists" red; no time limit → only the hang case red (20 s, then
-     a write). A local **rehearsal of `checks`** (scratch clone, the three pinned zips first on
-     `PATH`, verified by `which`): all three sha256 OK, wasmtime pin OK, suite 89/89, the three adder
-     lines, surface current, compat floor patch and v2.0.1's 89 green. ⚠️ The rehearsal caught two
-     pins that had lost their last hex digit: `sha256sum` printed a leading `\` (escaped path) and
-     `cut -c1-64` kept it. Re-measured from stdin. **Real GitHub, read-only `--dry-run`, no token
-     (2026-11-09):** `v2.0.1` at `03307ac` → the annotated tag peeled, no page → "would POST", exit
-     0; the same tag at 2.0.0's `3cfce9a` → refused, exit 1. **PROVEN ON GITHUB (2026-11-09):**
-     the push of `main` `aace4e6` ran **42652413051**, where `checks` went green (every step:
-     pinned installs, wasmtime pin, suite, example, surface, compat) and `release` was skipped, as
-     designed. Tag `v2.0.2` ran **42653181536**, with `checks` and then `release` green; its
-     "Create the GitHub Release page" step made the page. Read back through the public REST API:
-     `v2.0.2`, author **`github-actions[bot]`**, not a draft, `releases/latest` = v2.0.2, the
-     VPM line on top of the generated notes, and the tag unmoved (`v2.0.2^{}` = `df6ebbe`). Each
-     run took about 3–4 minutes. Watched with a one-time poller on the Actions REST API (no `gh`).
-3. **`scripts/publish.ts`** — the deliberate VPM step, decoupled from `release`. **VPM has no
-   CLI/push publish command**: a module is registered **once** by submitting its git repo URL at
-   https://vpm.vlang.io/new (no auth token, no per-version upload), after which `v install
-   synapticforge1.uwl` clones the repo and `v update` pulls new commits. So this script is
-   a **clearly-logged no-op**: it reads the version, verifies the `v<version>` tag exists locally + on
-   `origin` (so you "publish" exactly what was released), then prints the one-time registration
-   instructions and that updates resolve off the pushed repo. Kept present so the
-   three-script shape is identical across all ports. `--dry-run` / `--yes` / `--allow-dirty` /
-   `--skip-tag-check` / `--remote`.
-
-**Why a no-op publish:** unlike crates.io/npm/PyPI (which need a real upload + token), VPM — like Go
-modules — resolves the package from the git repository itself. There is nothing to upload per release;
-the pushed tag/commit *is* the published artifact once the repo is registered. The script exists to
-keep the release/publish ritual and shape uniform with the sibling ports.
-
-**v1.0.0 status (2026-06-19):** version `1.0.0` set in `v.mod`. The V module + VPM package name is
-`uwl` (renamed from `universal_wasm_loader` because VPM rejects underscores — see the Naming note
-above). Tagged `v1.0.0` at HEAD locally; while the tag is still unpushed it has been moved forward to
-keep pace with release-readying commits (the `uwl` rename and the API doc-comment pass), so the
-released state carries the VPM-valid name and the documented API. **Remote state:** the owner pushed
-`main` through the rename commit (`447db51`) to `origin` (so the `uwl` name is live on GitHub for VPM
-registration); the later doc-comment commit is local-only and fast-forwards cleanly. The `v1.0.0` tag
-is **not on the remote** and **no GitHub Release** exists yet (pending owner confirmation). Outward-
-facing steps that remain (owner-gated): push the remaining commit(s), push the `v1.0.0` tag, create the
-GitHub Release via `release`, and register the repo once at https://vpm.vlang.io/new (`publish` is
-otherwise a no-op). The tag is what a tag/repo-resolving
-registry (VPM, like Go) uses; there is no separate package upload for this ecosystem.
-
-**Release 1.1.1 (2026-10-26, owner: "yes" to cutting it) — a PATCH:** the gate's floor vs `v1.1.0`
-is patch (public surface unchanged, 16 symbols, SPEC 3.0.0; `uwl/` differs from `v1.1.0` by one doc
-comment). Contents since `v1.1.0`: scripts ported to Bun with the compatibility gate; the V test
-suite over the stamped fixtures; `.gitattributes`; the example loads `tests/math_50.wasm`; README
-fixes (quick start `greet` on `strings_50`; mismatched-`call_*` warning). Cut with
-`bump-version.ts patch` (on `release/1.1.1`) → `--no-ff` merge `f5c964d` → `release.ts` on
-`main`, which ran the example, the suite (42/42) and `compat.ts --release` (patch step) before it
-tagged. **Annotated tag `v1.1.1` (`e9594a3`) → `f5c964d`, pushed with `main`, read back with
-`ls-remote`;** `publish.ts` found the tag locally and on `origin`; published on VPM (owner),
-verified by an install (see "Repository home"). The GitHub Release page was not made (and will not
-be: owner, 2026-11-09, "only new tags will get release pages").
-
-**Release 2.0.0 (2026-11-08, owner: "update the project memory files, commit, push then bump and
-release") — a MAJOR:** SPEC 4.0.0 (row C29: the loader-c v2.0.0 header, kind-checked `call_*`,
-`call_f32` / `call_void`) and host import callbacks (`import_module_with`, `HostFn`, `Arg.as_*`,
-`nothing`); the zigcc fix for Zig 0.17.1. Floor vs `v1.1.1` major (`SPEC 3.0.0 -> 4.0.0` + 11
-additions; 16 → 27 symbols). Cut with `bump-version.ts major` (on `release/2.0.0`, `5bdd646`) →
-`--no-ff` merge **`3cfce9a`** → gate on it (suite 87/87, the three adder lines, surface current,
-`compat.ts --release`: major step, exit 0) → `release.ts` (example, suite, `compat --release` again)
-→ **annotated tag `v2.0.0` (`538c053`) → `3cfce9a`, `main` + tag pushed, read back with
-`ls-remote`** (`b12c584..3cfce9a`). `publish.ts --yes` (the VPM no-op) found the tag. **Verified as a
-user:** `VMODULES=<scratch> v install synapticforge1.uwl` installed `v.mod` version `2.0.0` at
-`3cfce9a`, the same day. The GitHub Release page was not made (and will not be: owner, 2026-11-09,
-"only new tags will get release pages").
-⚠️ **Order changed on purpose:** the owner said "push then bump", but before the bump the gate's
-`compat.ts` (report mode) is RED. It runs the previous tag's tests whatever the floor, and v1.1.1's
-`imports_50 … reads_zero` test is the intended break. A red step means no push (INDEX), so the bump
-came first and `release.ts` pushed `main` and the tag together, gated by `compat.ts --release`
-(which skips previous-tag tests for a major step). See compat-gate.md.
-
-**Release 2.0.1 (2026-11-09, owner: "go" after the C39 / H30 report) — a PATCH:** loader-c
-v2.1.0 header + `uwl_err` (a failing callback stops the WASM at the import, void ones too; C39);
-`release.ts` / `bump-version.ts` without the GitHub CLI (H30). Floor vs `v2.0.0` patch (surface
-unchanged, 27 symbols); v2.0.0's own 87 asserts green on the new code. Order as the owner's rule
-allows for a patch: full gate on `5bef88a` (89/89, the three adder lines, surface current,
-`compat.ts` GREEN) → `main` pushed (`0d81e4a..5bef88a`) → `bump-version.ts patch` on
-`release/2.0.1` (`56217e2`) → `--no-ff` merge **`03307ac`** → `release.ts --dry-run`, then
-`release.ts` (example, 89/89, `compat --release` patch step with v2.0.0's tests GREEN) →
-**annotated tag `v2.0.1` (`ef2299a`) → `03307ac`, `main` + tag pushed, read back with
-`ls-remote`**. The new owner-item path printed the Release page link (its first real run).
-`publish.ts --yes` found the tag. **Verified as a user:** a scratch `v install synapticforge1.uwl`
-gave `v.mod` 2.0.1 at `03307ac`, with `uwl_err` in the shim. No Release page (owner, 2026-11-09:
-"only new tags will get release pages"; CI makes them from the next tag).
-
-**Release 2.0.2 (2026-11-09, owner: "update the project memory files, commit, push and release")
-— a PATCH:** the CI release workflow (H32), the Bun 1.4.4 pins (H31), `fetch-wasmtime.ts`'s
-sha256 pin and time limit, and `release.ts`'s push read-back; `uwl/` unchanged since v2.0.1 (floor
-patch, v2.0.1's 89 asserts green). Order: full gate on `aace4e6` → `main` pushed
-(`6446438..aace4e6`) → **CI `checks` watched GREEN on GitHub (run 42652413051) before the bump**
-→ `bump-version.ts patch` on `release/2.0.2` (`72f39a7`) → `--no-ff` merge **`df6ebbe`** →
-`release.ts` (example, 89/89, `compat --release` patch step), annotated tag **`v2.0.2`
-(`91f4907`) → `df6ebbe`**, `main` + tag pushed. Its first real read-back printed `main =
-v2.0.2^{} = df6ebbe`. The tag run 42653181536 (`checks` → `release`) made the **first CI Release
-page, author `github-actions[bot]`**. `publish.ts --yes` found the tag; a scratch VPM install gave
-2.0.2 at `df6ebbe`.
-
-**Release state (2026-11-09, after 2.0.2):** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
-`f5c964d`, `v2.0.0` → `3cfce9a`, `v2.0.1` → `03307ac`, `v2.0.2` → `df6ebbe` (the only one with a
-Release page; older tags stay without one, owner); `v1.0.0` exists only locally (never pushed).
-From the next bump on, Rule 3 runs v2.0.2's 89-assert suite against the new source.
-
-**Superseded — state as of 2026-11-09, before 2.0.2:** the same without `v2.0.2`. **As of
-2026-11-08:** also without `v2.0.1`; Rule 3 ran v2.0.0's 87 asserts.
-
-**Superseded — state as of 2026-10-26:** tags on `origin`: `v1.1.0` → `c21df51`, `v1.1.1` →
-`f5c964d`. `v1.1.1` was the first tag that carried `tests/`.
-
-**Superseded — state as of 2026-10-21:** `v.mod` is at **1.1.0** (`c21df51` "Bump version: v1.0.0 ->
-v1.1.0"). `origin` carries the annotated tag **`v1.1.0`** → `c21df51`. `main` is in sync with
-`origin/main`. The `v1.0.0` tag exists **only locally** and was never pushed. The VPM package was
-registered on 2026-06-19 (see "Repository home"). Whether a v1.1.0 GitHub Release exists was not
-checked.
+**Port to Bun (2026-10-26, workspace letter H15)** — kept here because it is about the scripts.
+The four `.vsh` were ported to TypeScript and deleted only after an output-diff proved each port
+equivalent: a one-time harness ran the `.vsh` and the `.ts` on the same inputs, each in a fresh
+throwaway clone at the same path with a local bare remote, and compared exit code, stdout, stderr
+and the resulting state. **42 cases, 42 identical**: bump 16, release 11, publish 12, fetch 3.
+**Inverted:** one exit code changed in a scratch copy of the bump port → exactly the 2 cases that
+reach it reported DIFF. ⚠️ Found on the way: under a ~200-character base path the `.vsh` fetch
+failed after writing part of the tree, where the port extracted everything; Windows' 260-character
+path limit in V's `szip` is the suspected layer — UNVERIFIED. (The release and bump behaviour that
+proof covered has changed since; [release.md](release.md) has today's.)
 
 ## Known gaps / not yet done
 
@@ -560,7 +403,9 @@ checked.
   2026-11-09, which is also -c `v2.1.1`'s header).
 - ~~OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0`, `v2.0.1`~~ — **DECIDED, owner
   2026-11-09: "only new tags will get release pages"**; these tags stay without one. New tags get
-  theirs from CI (see "CI release workflow").
+  theirs from CI ([release.md](release.md)).
+- **The `tag` → `release` → `publish` path (2026-11-10, the owner's order) is unproven on GitHub**
+  until the next release; rehearsed locally ([release.md](release.md) § "The proofs").
 - ~~The CI workflow is unproven on GitHub~~ — **proven 2026-11-09** (runs 42652413051 and
   42653181536; v2.0.2's page by `github-actions[bot]`).
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
