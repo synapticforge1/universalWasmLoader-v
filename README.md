@@ -19,6 +19,15 @@ The module is published on [VPM](https://vpm.vlang.io), which installs it from
 this repository. It still needs the wasmtime C API SDK and a C compiler that
 can link it; see [Build & run](#build--run).
 
+**`error: failed to install` on Windows?** V's `vpm` (V 0.5.2) clones into your
+`TEMP` folder and then moves the clone into `VMODULES`; that move fails when the
+two are on different drives. Point `TEMP` (and `TMP`) at a folder on the same
+drive as `VMODULES` for the install, for example:
+
+```sh
+TEMP='D:\tmp' TMP='D:\tmp' VMODULES='D:\vmodules' v install synapticforge1.uwl
+```
+
 ## Quick start
 
 ```v
