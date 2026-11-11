@@ -98,6 +98,16 @@ by an output-diff, 42 cases identical; see `cmem/overview.md` § "Release / publ
 
 Newest first. Each entry: what changed, the level and why, how it was cut, and what was read back.
 
+### 2.0.4 — 2026-11-10 — patch
+
+**What changed:** CI's `publish` read-back is fixed. V 0.5.2's `vpm` clones into TEMP and then
+moves the clone into `VMODULES`, which fails across drives, and that failed 2.0.3's read-back on
+the runner. The step now uses a same-drive TEMP, retries, and annotates its causes publicly.
+README § Install tells users the same remedy. `uwl/` unchanged since v2.0.3. **Level:** patch,
+the owner's (asked; floor patch). **Cut:** gate on `59c76c5` → `main` pushed; run
+**42946800656** `checks` green (not a release) → `bump-version.ts patch` → release notes → merge →
+`release.ts`. **Read back:** recorded after the run.
+
 ### 2.0.3 — 2026-11-10 — patch
 
 **What changed:** the release process in the owner's order (H33): `release.ts` pushes `main` only
