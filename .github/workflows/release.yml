@@ -229,12 +229,28 @@ jobs:
         run: |
           set -euo pipefail
           M="$(cygpath -u "$RUNNER_TEMP")/vmodules"
-          rm -rf "$M" && mkdir -p "$M"
-          VMODULES="$(cygpath -w "$M")" v install synapticforge1.uwl
-          got="$(sed -n "s/^[[:space:]]*version:[[:space:]]*'\([^']*\)'.*/\1/p" "$M/synapticforge1/uwl/v.mod" | head -1)"
-          head="$(git -C "$M/synapticforge1/uwl" rev-parse HEAD)"
+          # Three attempts, 300 s each (7.21). On a failure, v's own output goes into a PUBLIC
+          # annotation: job logs need admin rights, and v2.0.3's first run failed here with only
+          # "exit code 1" to read (a scratch install outside CI passed with the same pinned V).
+          ok=""
+          for i in 1 2 3; do
+            rm -rf "$M" && mkdir -p "$M"
+            if out="$(VMODULES="$(cygpath -w "$M")" timeout 300 v install synapticforge1.uwl 2>&1)"; then
+              echo "$out"; ok=1; break
+            else
+              code=$?
+              echo "$out"
+              echo "::warning::v install attempt $i failed (exit $code): $(tail -5 <<< "$out" | tr '\r\n' '  ' | cut -c1-600)"
+              [[ $i -lt 3 ]] && sleep 30
+            fi
+          done
+          [[ -n "$ok" ]] || { echo "::error::v install synapticforge1.uwl failed 3 times; see the warnings above"; exit 1; }
+          U="$M/synapticforge1/uwl"
+          [[ -f "$U/v.mod" ]] || { echo "::error::v install reported success but $U/v.mod is missing"; exit 1; }
+          got="$(sed -n "s/^[[:space:]]*version:[[:space:]]*'\([^']*\)'.*/\1/p" "$U/v.mod" | head -1)"
+          head="$(git -C "$U" rev-parse HEAD 2>&1)" || { echo "::error::the installed module is not a git checkout: $head"; exit 1; }
           echo "VPM installed version $got at $head"
           test "v$got" = "$TAG" || { echo "::error::VPM installed $got, not ${TAG#v}"; exit 1; }
-          git -C "$M/synapticforge1/uwl" merge-base --is-ancestor "$SHA" HEAD \
+          git -C "$U" merge-base --is-ancestor "$SHA" HEAD \
             || { echo "::error::the installed tree does not contain the tagged commit $SHA"; exit 1; }
           echo "VPM serves ${TAG}: $head contains $SHA"

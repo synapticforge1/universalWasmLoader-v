@@ -79,8 +79,12 @@ https://vpm.vlang.io/new): it checks the tag locally and on `origin` and prints 
   defect, fixed in `cb964c0`: an empty `grep` killed the step under `pipefail`.
 - The **`publish`** read-back step, exact text, against the real VPM: `v2.0.2` at `df6ebbe` → pass;
   `v2.0.3` → fail; a commit not in the tree → fail. **3/3.**
-- **Not yet proven on GitHub:** the `tag` → `release` → `publish` path runs at the next release; a
-  `main` push runs `checks` (and the is-release step) right away.
+- **On GitHub (2026-11-10):** run 42942241240 (`main` push, not a release) — `checks` green, the
+  others skipped. Run 42943746360 (v2.0.3) — `checks`, **`tag`** and **`release`** green (CI's
+  tag by `github-actions[bot]`, the page from it); **`publish` failed** in `v install` on the
+  runner, cause unreadable without admin rights (see 2.0.3 below). The read-back passed outside CI.
+  The diagnosable step (retries + public annotations) is rehearsed 4/4 and first runs at the next
+  release.
 
 ### Before 2026-11-10 (history)
 
@@ -104,8 +108,23 @@ release gate puts the SDK's `lib/` on the example's PATH (it had relied on a str
 `wasmtime.dll`). `uwl/` unchanged since v2.0.2. **Level:** patch, the owner's (asked; the floor is
 patch, and v2.0.2's 89 asserts are green on this tree). **Cut:** gate on `34c1214` → `main` pushed;
 the new workflow's first run, **42942241240**, ran `checks` green ("not a release": v2.0.2 tagged)
-and skipped `tag` / `release` / `publish` → `bump-version.ts patch` (`816025b`) → merge →
-`release.ts`. **Read back:** recorded after the run.
+and skipped `tag` / `release` / `publish` → `bump-version.ts patch` (`816025b`) → release notes
+(`7405875`) → merge **`be2bf59`** → `release.ts`: guards, gate (example, 89/89,
+`compat --release` patch step), `main` pushed (`34c1214..be2bf59`) and read back, **no local tag**.
+**CI run 42943746360 — the first release in the owner's order:** `checks` green ("a release
+candidate"); **`tag` green** — CI's annotated tag **`v2.0.3` (`ce101e0`, tagger
+`github-actions[bot]`) → `be2bf59`**; **`release` green** — the page by **`github-actions[bot]`**,
+not a draft, `releases/latest` = v2.0.3. ⚠️ **`publish` FAILED**: its read-back step ended with
+"Process completed with exit code 1" and none of its own `::error::` lines, so `v install` itself
+failed on the runner. The job log needs admin rights, so the cause was not readable. **Read back as
+a user (U10), outside CI: PASS** — a scratch `v install synapticforge1.uwl` gave 2.0.3 at
+`be2bf59`, with the installed V and with a fresh V from the same pinned zip. So VPM serves the
+release, and only CI's read-back is unproven. **Fix (U12, rehearsed before landing, 4/4):** the step
+now retries `v install` three times (300 s each), puts `v`'s own output into a PUBLIC annotation on
+each failure, and annotates the two other silent paths found while rehearsing (a missing `v.mod`, a
+tree that is not a git checkout). It lands with this record and is first exercised at the next
+release. 🗓️ OWNER (optional): "Re-run failed jobs" on run 42943746360 in the web UI. It re-runs
+the OLD step at `be2bf59`; a pass would mean the failure was transient.
 
 ### 2.0.2 — 2026-11-09 — patch
 
