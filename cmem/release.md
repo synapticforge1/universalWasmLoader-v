@@ -94,6 +94,19 @@ by an output-diff, 42 cases identical; see `cmem/overview.md` § "Release / publ
 
 Newest first. Each entry: what changed, the level and why, how it was cut, and what was read back.
 
+### 2.0.3 — 2026-11-10 — patch
+
+**What changed:** the release process in the owner's order (H33): `release.ts` pushes `main` only
+and never tags. CI on that push runs `checks` (with "is this a release?") → `tag` (CI's annotated
+tag, REST) → `release` (the page from the tag) → `publish` (a `v install` read-back in CI, fatal).
+The bump commit is now `bump to vX.Y.Z`. `cmem/release.md` is the one release record (D3). The
+release gate puts the SDK's `lib/` on the example's PATH (it had relied on a stray
+`wasmtime.dll`). `uwl/` unchanged since v2.0.2. **Level:** patch, the owner's (asked; the floor is
+patch, and v2.0.2's 89 asserts are green on this tree). **Cut:** gate on `34c1214` → `main` pushed;
+the new workflow's first run, **42942241240**, ran `checks` green ("not a release": v2.0.2 tagged)
+and skipped `tag` / `release` / `publish` → `bump-version.ts patch` (`816025b`) → merge →
+`release.ts`. **Read back:** recorded after the run.
+
 ### 2.0.2 — 2026-11-09 — patch
 
 **What changed:** the CI release workflow (H32: `checks` on windows-latest, then the GitHub Release
