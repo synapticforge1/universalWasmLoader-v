@@ -20,8 +20,9 @@
 // HEAD, two commits past the last tag) — every push to `main` reaches VPM users, so this gate,
 // and the one before EVERY push (cmem/INDEX.md), is what guards them; CI's `checks` confirms.
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { capture, die, has, help, modField, porcelain, readMod, ROOT, run, tagExists } from "./_lib.ts";
+import { SDK } from "./test.ts";
 
 const USAGE = `
 Start a release of universalWasmLoader-v (version from v.mod): gate, push main, read it back.
@@ -79,12 +80,19 @@ console.log(`guards: clean tree, on main, contains ${remote}/main, ${tag} absent
 // V's default tcc cannot link wasmtime: use VFLAGS' -cc when set, else the zigcc tool (built from
 // scripts/zigcc.v on first use) when zig is on PATH.
 console.log("Gate: the example, the suite, the compatibility gate (release mode)…");
+if (!existsSync(join(SDK, "include"))) die(1, `wasmtime C API not found at ${SDK}; run: bun scripts/fetch-wasmtime.ts`);
+// The example needs wasmtime.dll at run time: the SDK's lib/ goes first on PATH (as test.ts and
+// CI do), so the gate never depends on a stray copy beside the repo (found 2026-11-10: a clean
+// clone failed with exit 53, a missing DLL, where this checkout had one staged at the root). The
+// environment is passed whole, as test.ts does: on Windows the variable is `Path`, and assigning
+// process.env.PATH did not reach the child.
+const exampleEnv = { ...process.env, PATH: `${join(SDK, "lib")}${delimiter}${process.env.PATH ?? ""}` };
 if ((process.env.VFLAGS ?? "").includes("-cc")) {
-  run(false, ["v", "run", "examples/adder.v"]);
+  run(false, ["v", "run", "examples/adder.v"], exampleEnv);
 } else if (has("zig")) {
   const zigcc = join(ROOT, "scripts", process.platform === "win32" ? "zigcc.exe" : "zigcc");
   if (!existsSync(zigcc)) run(false, ["v", "-o", zigcc, join(ROOT, "scripts", "zigcc.v")]);
-  run(false, ["v", "-cc", zigcc, "run", "examples/adder.v"]);
+  run(false, ["v", "-cc", zigcc, "run", "examples/adder.v"], exampleEnv);
 } else {
   die(1, "no -cc in VFLAGS and zig not on PATH; the gate cannot build the example");
 }
