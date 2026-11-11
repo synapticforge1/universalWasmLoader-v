@@ -123,8 +123,16 @@ release, and only CI's read-back is unproven. **Fix (U12, rehearsed before landi
 now retries `v install` three times (300 s each), puts `v`'s own output into a PUBLIC annotation on
 each failure, and annotates the two other silent paths found while rehearsing (a missing `v.mod`, a
 tree that is not a git checkout). It lands with this record and is first exercised at the next
-release. 🗓️ OWNER (optional): "Re-run failed jobs" on run 42943746360 in the web UI. It re-runs
-the OLD step at `be2bf59`; a pass would mean the failure was transient.
+release. **CAUSE FOUND (2026-11-10), from the job log the owner pasted** (a re-run of the failed
+job, 02:25): `vpm` cloned into `C:\Users\runneradmin\AppData\Local\Temp\v_0\vpm_modules\…` (the
+system TEMP, on C:), then had to MOVE the clone into `VMODULES` = `D:\a\_temp\vmodules` (on D:):
+`error: failed to install`. A rename cannot cross drives. **Reproduced locally:** `VMODULES` on D:
+with TEMP on C: → the same error, exit 1; a same-drive TEMP → installed 2.0.3. **Fixed** in the
+step: TEMP and TMP point beside VMODULES under `RUNNER_TEMP`. Proven under the runner's layout
+(`RUNNER_TEMP` on D:, TEMP on C:): the OLD step text (from git) fails with CI's exact error; the
+NEW text passes (2.0.3, containing `be2bf59`). My first rehearsals passed only because they put
+everything on C:. The same pitfall hits USERS whose `VMODULES` and TEMP are on different drives:
+README § Install now says how to avoid it.
 
 ### 2.0.2 — 2026-11-09 — patch
 

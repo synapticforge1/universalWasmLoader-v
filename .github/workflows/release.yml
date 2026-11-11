@@ -229,13 +229,18 @@ jobs:
         run: |
           set -euo pipefail
           M="$(cygpath -u "$RUNNER_TEMP")/vmodules"
+          # vpm clones into the system TEMP, then MOVES the clone into VMODULES — a rename, which
+          # fails across drives. On the runner TEMP is on C: and RUNNER_TEMP on D:, so v2.0.3's
+          # read-back failed with "error: failed to install" (log from the owner; reproduced
+          # locally with VMODULES on D: and TEMP on C:, and fixed by a same-drive TEMP). So TEMP and
+          # TMP point beside VMODULES, under RUNNER_TEMP.
+          VT="$(cygpath -u "$RUNNER_TEMP")/vpm-tmp"
           # Three attempts, 300 s each (7.21). On a failure, v's own output goes into a PUBLIC
-          # annotation: job logs need admin rights, and v2.0.3's first run failed here with only
-          # "exit code 1" to read (a scratch install outside CI passed with the same pinned V).
+          # annotation (job logs need admin rights).
           ok=""
           for i in 1 2 3; do
-            rm -rf "$M" && mkdir -p "$M"
-            if out="$(VMODULES="$(cygpath -w "$M")" timeout 300 v install synapticforge1.uwl 2>&1)"; then
+            rm -rf "$M" "$VT" && mkdir -p "$M" "$VT"
+            if out="$(TEMP="$(cygpath -w "$VT")" TMP="$(cygpath -w "$VT")" VMODULES="$(cygpath -w "$M")" timeout 300 v install synapticforge1.uwl 2>&1)"; then
               echo "$out"; ok=1; break
             else
               code=$?

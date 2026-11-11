@@ -404,10 +404,12 @@ proof covered has changed since; [release.md](release.md) has today's.)
 - ~~OWNER item: GitHub Release pages for `v1.1.1`, `v2.0.0`, `v2.0.1`~~ — **DECIDED, owner
   2026-11-09: "only new tags will get release pages"**; these tags stay without one. New tags get
   theirs from CI ([release.md](release.md)).
-- **CI's `publish` read-back failed at v2.0.3** (run 42943746360; `checks`, `tag` and `release`
-  were green, and the read-back as a user outside CI passed). The cause is unknown: the job log
-  needs admin rights, and the step now annotates its causes publicly ([release.md](release.md),
-  2.0.3). It is proven only when a release's `publish` goes green.
+- **CI's `publish` read-back failed at v2.0.3** (run 42943746360) — **cause found and fixed
+  2026-11-10:** V 0.5.2's `vpm` clones into TEMP, then moves the clone into `VMODULES`, and that
+  move fails across drives (runner: TEMP on C:, `RUNNER_TEMP` on D:). Reproduced and fixed with a
+  same-drive TEMP ([release.md](release.md), 2.0.3). It is proven on GitHub only when a release's
+  `publish` goes green. **Users hit the same `vpm` limit** when `VMODULES` and TEMP are on different
+  drives (README § Install). An upstream V issue, not filed from here: 🗓️ owner's call.
 - ~~The CI workflow is unproven on GitHub~~ — **proven 2026-11-09** (runs 42652413051 and
   42653181536; v2.0.2's page by `github-actions[bot]`).
 - **C-compiler requirement:** V's default `tcc` cannot link wasmtime; a build needs Zig (via the
