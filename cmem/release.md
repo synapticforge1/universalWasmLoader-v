@@ -82,9 +82,9 @@ https://vpm.vlang.io/new): it checks the tag locally and on `origin` and prints 
 - **On GitHub (2026-11-10):** run 42942241240 (`main` push, not a release) — `checks` green, the
   others skipped. Run 42943746360 (v2.0.3) — `checks`, **`tag`** and **`release`** green (CI's
   tag by `github-actions[bot]`, the page from it); **`publish` failed** in `v install` on the
-  runner, cause unreadable without admin rights (see 2.0.3 below). The read-back passed outside CI.
-  The diagnosable step (retries + public annotations) is rehearsed 4/4 and first runs at the next
-  release.
+  runner (the cross-drive `vpm` move, found from the log the owner pasted; see 2.0.3 below).
+  **Run 42947302461 (v2.0.4): ALL FOUR jobs green — the whole order PROVEN on GitHub:**
+  `checks` → `tag` → `release` → `publish` (the same-drive-TEMP read-back passed on the runner).
 
 ### Before 2026-11-10 (history)
 
@@ -106,7 +106,15 @@ the runner. The step now uses a same-drive TEMP, retries, and annotates its caus
 README § Install tells users the same remedy. `uwl/` unchanged since v2.0.3. **Level:** patch,
 the owner's (asked; floor patch). **Cut:** gate on `59c76c5` → `main` pushed; run
 **42946800656** `checks` green (not a release) → `bump-version.ts patch` → release notes → merge →
-`release.ts`. **Read back:** recorded after the run.
+`release.ts`: guards, gate, `main` pushed (`59c76c5..d94b6d1`) and read back, no local tag.
+**CI run 42947302461 — every job green:** `checks` ("a release candidate"); `tag`: CI's annotated
+tag **`v2.0.4` (`f2cd5dd`, tagger `github-actions[bot]`) → `d94b6d1`**; `release`: the page by
+**`github-actions[bot]`**, not a draft, `releases/latest` = v2.0.4; **`publish` green** — `v
+install` as a user on the runner gave 2.0.4 on a tree containing `d94b6d1`. **Read back outside
+CI:** `ls-remote` `v2.0.4^{}` = `main` = `d94b6d1`; a scratch `v install` gave 2.0.4 at
+`d94b6d1`. The first release whose four CI jobs all passed. GitHub annotated the two ubuntu jobs:
+"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026" — a notice (the
+jobs need only git, curl and Bun); pinning `ubuntu-24.04` is a later choice, not made here.
 
 ### 2.0.3 — 2026-11-10 — patch
 
