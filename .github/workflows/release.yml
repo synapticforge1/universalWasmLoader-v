@@ -88,7 +88,7 @@ jobs:
             echo "$tag is already tagged: not a release (checks only)"
             echo "release=false" >> "$GITHUB_OUTPUT"
           else
-            newest="$(printf '%s\n' $tags | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+            newest="$(printf '%s\n' $tags | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -1)"
             if [[ -n "$newest" && "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]]; then
               echo "::error::v.mod's $tag is below the newest tag $newest"; exit 1
             fi
