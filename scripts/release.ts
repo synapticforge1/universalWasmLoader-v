@@ -1,36 +1,44 @@
-// Cut a release of universalWasmLoader-v consistently.
+// Start a release of universalWasmLoader-v: push `main` with the bump commit; CI does the rest.
 //
-// The single source of truth for the version is the `version:` field in v.mod.
-// This script reads it, runs the gate, tags the current commit `v<version>` and
-// pushes the branch and tag to `origin`. The tag push runs
-// .github/workflows/release.yml, which creates the GitHub Release page (owner,
-// 2026-11-09, workspace row C41; no GitHub CLI, H30); this script prints where
-// the page will be. VPM (the V package manager) resolves the package from the
-// git repo itself, so the pushed tag/commit is the part that actually matters.
-// Publishing to VPM is a separate, deliberate step; see scripts/publish.ts.
+// 🔒 The owner's order (2026-11-10; workspace letter H33, release-process.md § 5): "the CI to
+// check first, then push the tag, and then create the release page from the tag, then publish the
+// package to the registry". So this script (U4) runs the gate as a user, pushes `main` ONLY and
+// reads it back; it makes and pushes NO tag. The push runs .github/workflows/release.yml:
+// `checks` → `tag` (CI's annotated tag on the commit checks passed) → `release` (the GitHub
+// Release page from the tag) → `publish` (for VPM the tag is the publish: `v install` as a user,
+// in CI, fatal).
 //
-// Idempotent: if the tag already exists it is reused (must point at HEAD).
+// The version is v.mod's `version:` (bump it first: scripts/bump-version.ts <level>).
+//
+// Guards, each refusing with exit 1 (nothing is pushed):
+//   - a clean tree (untracked files count);
+//   - on `main`, with `origin/main` (fetched) an ancestor of HEAD (no divergence);
+//   - the tag v<version> absent locally and on origin (a released version never moves);
+//   - the cold gate: the example, the suite, and the compatibility gate in release mode.
+//
+// VPM installs the repository's `main` (measured 2026-11-10: a scratch `v install` gave `main`'s
+// HEAD, two commits past the last tag) — every push to `main` reaches VPM users, so this gate,
+// and the one before EVERY push (cmem/INDEX.md), is what guards them; CI's `checks` confirms.
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { capture, die, has, help, modField, porcelain, readMod, ROOT, run, tagExists } from "./_lib.ts";
+import { SDK } from "./test.ts";
 
 const USAGE = `
-Cut a release of universalWasmLoader-v (version from v.mod).
+Start a release of universalWasmLoader-v (version from v.mod): gate, push main, read it back.
+CI then checks, tags, makes the Release page and reads VPM back (.github/workflows/release.yml).
 
 Usage: bun scripts/release.ts [options]
-  --no-build       Skip the \`v run examples/adder.v\` + \`bun scripts/test.ts\`
-                   verification (the compatibility gate still runs).
-  --remote <name>  Git remote to push to (default: origin).
-  --dry-run        Print what would happen; make no tags/pushes/releases.
+  --remote <name>  Git remote (default: origin).
+  --dry-run        Run every guard and the gate; push nothing.
   -h, --help       Show this help.
 
-Idempotent: if the tag already exists it is reused (must point at HEAD). The
-GitHub Release page is made by .github/workflows/release.yml on the tag push.
+Refuses a dirty tree (untracked files count), a branch other than main, a main that does not
+contain <remote>/main, and a version whose tag exists locally or on the remote. Makes NO tag.
 `;
 
 process.chdir(ROOT);
 
-let doBuild = true;
 let remote = "origin";
 let dryRun = false;
 const argv = process.argv.slice(2);
@@ -40,97 +48,70 @@ for (let i = 0; i < argv.length; i++) {
     if (i + 1 >= argv.length) die(2, `missing value for ${a}`);
     remote = argv[i + 1];
     i++;
-  } else if (a === "--no-build") doBuild = false;
-  else if (a === "--dry-run") dryRun = true;
+  } else if (a === "--dry-run") dryRun = true;
   else if (a === "-h" || a === "--help") help(USAGE);
   else die(2, `unknown argument: ${a}`);
 }
 
-// --- Derive version from v.mod (source of truth) ----------------------------
+// --- Version ------------------------------------------------------------------
 const version = modField(readMod(), "version");
-if (!version) die(1, "could not read version from v.mod");
+if (!/^\d+\.\d+\.\d+$/.test(version)) die(1, `could not read a plain semver version from v.mod ('${version}')`);
 const tag = `v${version}`;
 console.log(`Releasing ${tag} (from v.mod)`);
 
-// --- Preflight checks -------------------------------------------------------
+// --- Guards -------------------------------------------------------------------
 if (porcelain() !== "") {
-  console.error("error: working tree is dirty — commit or stash before releasing.");
   console.error(capture(["git", "status", "--short"]).out);
-  process.exit(1);
+  die(1, "the working tree is not clean (untracked files count) — commit first");
 }
-
 const branch = capture(["git", "rev-parse", "--abbrev-ref", "HEAD"]).out;
-console.log(`On branch: ${branch}`);
-
-// If the tag already exists, it must point at the current commit.
-let tagIsThere = false;
-if (tagExists(tag)) {
-  const tagCommit = capture(["git", "rev-parse", `${tag}^{commit}`]).out;
-  const head = capture(["git", "rev-parse", "HEAD"]).out;
-  if (tagCommit !== head) {
-    console.error(`error: tag ${tag} exists but does not point at HEAD.`);
-    console.error("       Bump version in v.mod or move the tag deliberately.");
-    process.exit(1);
-  }
-  console.log(`tag ${tag} already exists at HEAD — reusing.`);
-  tagIsThere = true;
+if (branch !== "main") die(1, `on '${branch}', not main — merge the release branch into main first`);
+if (capture(["git", "fetch", "-q", remote]).code !== 0) die(1, `git fetch ${remote} failed`);
+if (capture(["git", "merge-base", "--is-ancestor", `${remote}/main`, "HEAD"]).code !== 0) {
+  die(1, `main does not contain ${remote}/main — pull or rebase first; nothing pushed`);
 }
+if (tagExists(tag)) die(1, `tag ${tag} exists locally — this version is released; bump first`);
+const remoteTag = capture(["git", "ls-remote", "--tags", remote, `refs/tags/${tag}`]);
+if (remoteTag.code !== 0) die(1, `git ls-remote ${remote} failed`);
+if (remoteTag.out !== "") die(1, `tag ${tag} exists on ${remote} — this version is released; bump first`);
+console.log(`guards: clean tree, on main, contains ${remote}/main, ${tag} absent locally and on ${remote}`);
 
-// --- Verify it builds -------------------------------------------------------
-// V's default tcc cannot link wasmtime. If VFLAGS already selects a C compiler
-// (-cc ...), trust it and run plain `v`. Otherwise use the zigcc tool (built
-// from scripts/zigcc.v on first use) when `zig` is on PATH, else fall back to
-// plain `v` (may fail).
-if (doBuild) {
-  console.log("Verifying build (v run examples/adder.v)…");
-  if ((process.env.VFLAGS ?? "").includes("-cc")) {
-    run(dryRun, ["v", "run", "examples/adder.v"]);
-  } else if (has("zig")) {
-    const zigcc = join(ROOT, "scripts", process.platform === "win32" ? "zigcc.exe" : "zigcc");
-    if (!existsSync(zigcc)) run(dryRun, ["v", "-o", zigcc, join(ROOT, "scripts", "zigcc.v")]);
-    run(dryRun, ["v", "-cc", zigcc, "run", "examples/adder.v"]);
-  } else {
-    console.error("warning: no -cc in VFLAGS and zig not found; trying default compiler.");
-    run(dryRun, ["v", "run", "examples/adder.v"]);
-  }
-  run(dryRun, ["bun", "scripts/test.ts"]);
+// --- The cold gate --------------------------------------------------------------
+// V's default tcc cannot link wasmtime: use VFLAGS' -cc when set, else the zigcc tool (built from
+// scripts/zigcc.v on first use) when zig is on PATH.
+console.log("Gate: the example, the suite, the compatibility gate (release mode)…");
+if (!existsSync(join(SDK, "include"))) die(1, `wasmtime C API not found at ${SDK}; run: bun scripts/fetch-wasmtime.ts`);
+// The example needs wasmtime.dll at run time: the SDK's lib/ goes first on PATH (as test.ts and
+// CI do), so the gate never depends on a stray copy beside the repo (found 2026-11-10: a clean
+// clone failed with exit 53, a missing DLL, where this checkout had one staged at the root). The
+// environment is passed whole, as test.ts does: on Windows the variable is `Path`, and assigning
+// process.env.PATH did not reach the child.
+const exampleEnv = { ...process.env, PATH: `${join(SDK, "lib")}${delimiter}${process.env.PATH ?? ""}` };
+if ((process.env.VFLAGS ?? "").includes("-cc")) {
+  run(false, ["v", "run", "examples/adder.v"], exampleEnv);
+} else if (has("zig")) {
+  const zigcc = join(ROOT, "scripts", process.platform === "win32" ? "zigcc.exe" : "zigcc");
+  if (!existsSync(zigcc)) run(false, ["v", "-o", zigcc, join(ROOT, "scripts", "zigcc.v")]);
+  run(false, ["v", "-cc", zigcc, "run", "examples/adder.v"], exampleEnv);
+} else {
+  die(1, "no -cc in VFLAGS and zig not on PATH; the gate cannot build the example");
 }
-
-// --- Compatibility gate: v.mod version vs the tag before it (Rules 1-3) -----
-// Runs under --dry-run too: it changes nothing, and a release it would block
-// should be known before anything is tagged.
+run(false, ["bun", "scripts/test.ts"]);
 run(false, ["bun", "scripts/compat.ts", "--release"]);
 
-// --- Tag, push, release -----------------------------------------------------
-if (!tagIsThere) run(dryRun, ["git", "tag", "-a", tag, "-m", `universalWasmLoader-v ${tag}`]);
-
-run(dryRun, ["git", "push", remote, branch]);
-run(dryRun, ["git", "push", remote, tag]);
-
-// Read the push back (H32): the remote's branch and the tag's peeled commit must both be HEAD.
+// --- Push main ONLY, read it back -------------------------------------------------
+const head = capture(["git", "rev-parse", "HEAD"]).out;
+run(dryRun, ["git", "push", remote, "main"]);
 if (!dryRun) {
-  const head = capture(["git", "rev-parse", "HEAD"]).out;
-  const ls = capture(["git", "ls-remote", remote, `refs/heads/${branch}`, `refs/tags/${tag}^{}`]);
+  const ls = capture(["git", "ls-remote", remote, "refs/heads/main"]);
   if (ls.code !== 0) die(1, `git ls-remote ${remote} failed; check the push by hand`);
-  const seen = new Map(ls.out.split("\n").filter(Boolean).map((l) => {
-    const [id, ref] = l.split("\t");
-    return [ref, id] as [string, string];
-  }));
-  const remoteBranch = seen.get(`refs/heads/${branch}`) ?? "(missing)";
-  const remoteTag = seen.get(`refs/tags/${tag}^{}`) ?? "(missing)";
-  console.log(`read back from ${remote}: ${branch} = ${remoteBranch}, ${tag}^{} = ${remoteTag}`);
-  if (remoteBranch !== head || remoteTag !== head) die(1, `${remote} does not hold HEAD (${head}) for both; check the push`);
+  const remoteMain = ls.out.split("\t")[0] || "(missing)";
+  console.log(`read back from ${remote}: main = ${remoteMain}`);
+  if (remoteMain !== head) die(1, `${remote}/main is ${remoteMain}, not HEAD ${head}; check the push`);
 }
 
-// The tag push runs .github/workflows/release.yml, which makes the page.
-console.log(`The tag push runs .github/workflows/release.yml, which creates the GitHub Release page:`);
-console.log(`  ${releasePageUrl(capture(["git", "remote", "get-url", remote]).out, tag)}`);
-
-console.log(`Done: ${tag}`);
-
-/** Where the Release page for `tag` appears, from a remote URL (https or ssh form). */
-function releasePageUrl(remoteUrl: string, tag: string): string {
-  const m = remoteUrl.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/);
-  if (!m) return `(remote ${remoteUrl || remote} is not a GitHub URL; no workflow runs there)`;
-  return `https://github.com/${m[1]}/${m[2]}/releases/tag/${tag}`;
-}
+const m = capture(["git", "remote", "get-url", remote]).out.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/);
+const base = m ? `https://github.com/${m[1]}/${m[2]}` : "(not a GitHub remote)";
+console.log(`CI now checks ${head.slice(0, 7)}, tags ${tag}, makes the page and reads VPM back:`);
+console.log(`  ${base}/actions   →   ${base}/releases/tag/${tag}`);
+console.log(`Done${dryRun ? " (dry run: nothing pushed)" : ""}: ${tag}`);

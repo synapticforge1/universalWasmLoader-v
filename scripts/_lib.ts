@@ -18,13 +18,15 @@ export function capture(args: string[]): { code: number; out: string } {
   return { code: p.exitCode ?? 1, out: p.stdout.toString().trim() };
 }
 
-/** Echo `+ cmd`, then (unless dryRun) run it with inherited stdio; a failure exits with its code. */
-export function run(dryRun: boolean, args: string[]): void {
+/** Echo `+ cmd`, then (unless dryRun) run it with inherited stdio; a failure exits with its code.
+ *  `env`, when given, is the child's whole environment (pass `{ ...process.env, … }`): assigning
+ *  `process.env.PATH` does not reach a child on Windows, where the variable is `Path`. */
+export function run(dryRun: boolean, args: string[], env?: Record<string, string | undefined>): void {
   console.log(`+ ${args.join(" ")}`);
   if (dryRun) return;
   const exe = Bun.which(args[0]);
   if (!exe) die(127, `${args[0]} not found on PATH`);
-  const code = Bun.spawnSync([exe, ...args.slice(1)], { stdio: ["inherit", "inherit", "inherit"] }).exitCode;
+  const code = Bun.spawnSync([exe, ...args.slice(1)], { stdio: ["inherit", "inherit", "inherit"], env }).exitCode;
   if (code !== 0) process.exit(code ?? 1);
 }
 

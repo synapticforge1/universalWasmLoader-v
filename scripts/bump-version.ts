@@ -1,11 +1,11 @@
 // Bump the project version in v.mod (the single source of truth).
 //
-// Updates the `version:` field to the next semver, commits the one-line change,
-// and stops there; tagging/pushing/releasing is scripts/release.ts's job.
-// Typical flow:
+// Updates the `version:` field to the next semver, commits the one-line change
+// (`bump to vX.Y.Z`, its own commit — workspace H33 U2), and stops there.
+// Typical flow (the level is the owner's; it is a required argument, U1):
 //
 //     bun scripts/bump-version.ts minor   # 1.0.0 -> 1.1.0, commits the bump
-//     bun scripts/release.ts              # tags v1.1.0, pushes; CI makes the Release page
+//     bun scripts/release.ts              # gate, push main; CI tags, makes the page, reads VPM back
 //
 // Refuses to run on a dirty tree (so the bump lands as an isolated commit) and
 // rejects a target that isn't strictly greater than the current version or whose
@@ -143,10 +143,10 @@ console.log(`+ set version: '${next}' in ${MOD_FILE}`);
 
 if (doCommit) {
   run(dryRun, ["git", "add", MOD_FILE]);
-  run(dryRun, ["git", "commit", "-m", `Bump version: v${cur} -> v${next}`]);
+  run(dryRun, ["git", "commit", "-m", `bump to v${next}`]);
 }
 
 console.log(`Done: ${next}`);
 if (doCommit) {
-  console.log(`Next: bun scripts/release.ts   # tags v${next}, pushes; the tag push makes the GitHub Release page`);
+  console.log(`Next: merge into main, then bun scripts/release.ts   # pushes main; CI tags v${next}, makes the page, reads VPM back`);
 }

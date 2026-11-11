@@ -1,27 +1,34 @@
 name: release
 
-# The release checks, and on a v* tag the GitHub Release page (owner, 2026-11-09: "they both need
-# the CI and release pages, not by hand" — workspace letter H32, row C41). VPM resolves the package
-# from the repository, so the pushed tag IS the release; this workflow gates it and writes the page.
+# 🔒 The owner's order (2026-11-10; workspace letter H33, release-process.md § 5): "the CI to
+# check first, then push the tag, and then create the release page from the tag, then publish the
+# package to the registry for the project in that order." Every push to main runs `checks`; when
+# v.mod's version has no tag yet (scripts/release.ts pushed a bump), the same run goes on:
 #
-# Two jobs, on purpose (workspace C30):
-# - `checks` (windows-latest; the binding links the MinGW wasmtime SDK, the same gate as
-#   scripts/release.ts runs locally): the suite, the example, the surface check and the
-#   compatibility gate (`--release` on a tag; report mode on main). It runs third-party code
-#   (V, Zig, wasmtime) with a read-only token; the clone is tokenless.
-# - `release` (tags only) runs on a fresh runner and executes only git, the pinned Bun and
-#   scripts/github-release.ts (GitHub's REST API with GITHUB_TOKEN — no GitHub CLI, H30). It is the
-#   only job with `contents: write`. The script refuses unless the tag peels to the commit
-#   `checks` passed (POST /releases would otherwise CREATE a missing tag), leaves an existing page
-#   untouched, and reads the page back.
+# - `checks` (U5; windows-latest — the binding links the MinGW wasmtime SDK): HEAD = github.sha;
+#   "is this a release?" (the version is plain semver, above every v* tag, and has no tag yet);
+#   the full gate — suite, example, surface, and the compatibility gate (`--release` for a release
+#   candidate: the floor and, for a patch/minor, the previous tag's tests; report mode otherwise).
+#   Runs third-party code (V, Zig, wasmtime) with a read-only token; the clone is tokenless.
+# - `tag` (U6; release only): CI's annotated tag on the commit checks passed, through the REST API
+#   (scripts/github-tag.ts): there at that commit = done, elsewhere = refused, read back.
+# - `release` (U7): the GitHub Release page FROM the tag (scripts/github-release.ts, H32's order).
+# - `publish` (U8 + U10): VPM has no upload — it installs the repository's `main` (measured
+#   2026-11-10). So the tag is the publish, and this job is the read-back as a user: a scratch
+#   `v install synapticforge1.uwl` must give this version, on a tree that contains the tagged
+#   commit. It fails otherwise.
 #
-# Pushes to main run `checks` alone, so the CI gate is proven before a release depends on it.
+# A tag created with the job's GITHUB_TOKEN starts no new workflow run, so tag → page → publish
+# run in THIS run (`needs:`); there is no tag trigger. U12: on a failure, "Re-run failed jobs" —
+# each job skips what is already done (tag at this commit, existing page); never a new tag for the
+# same code, never a moved tag.
 #
-# No `uses:` steps: every tool comes from its official download, pinned by version AND sha256, so
-# no third-party action code runs. Move a pin by changing both together: Bun from the release's
-# SHASUMS256.txt (Tooling rule 10: the latest installed Bun, 1.4.4 on 2026-11-09); Zig from
-# https://ziglang.org/download/index.json; V from the vlang/v release (0.5.2 = commit 7647ce1, the
-# toolchain the local gate uses). The wasmtime SDK is pinned in scripts/fetch-wasmtime.ts.
+# U9: `permissions: {}` at the top, each job only its own; no `uses:` steps — every tool comes
+# from its official download, pinned by version AND sha256. Move a pin by changing both together:
+# Bun from the release's SHASUMS256.txt (Tooling rule 10: the latest installed Bun, 1.4.4 on
+# 2026-11-09); Zig from https://ziglang.org/download/index.json; V from the vlang/v release
+# (0.5.2 = commit 7647ce1, the toolchain the local gate uses). The wasmtime SDK is pinned in
+# scripts/fetch-wasmtime.ts. One concurrency group per commit, never cancelled.
 #
 # Old tags (v1.1.0 … v2.0.1) get no page: owner, 2026-11-09, "only new tags will get release
 # pages" — so there is no workflow_dispatch trigger.
@@ -30,11 +37,12 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   BUN_VERSION: 1.4.4
@@ -56,6 +64,8 @@ jobs:
         shell: bash
     outputs:
       commit: ${{ steps.clone.outputs.commit }}
+      release: ${{ steps.is-release.outputs.release }}
+      tag: ${{ steps.is-release.outputs.tag }}
     steps:
       - name: Clone (no token, full history for the compatibility gate)
         id: clone
@@ -63,7 +73,29 @@ jobs:
           set -euo pipefail
           git clone "https://github.com/${{ github.repository }}" .
           git checkout --detach "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Is this a release? (v.mod's version has no tag yet)
+        id: is-release
+        run: |
+          set -euo pipefail
+          version="$(sed -n "s/^[[:space:]]*version:[[:space:]]*'\([^']*\)'.*/\1/p" v.mod | head -1)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::v.mod version '$version' is not plain semver"; exit 1; }
+          tag="v$version"
+          tags="$(git ls-remote --tags --refs "https://github.com/${{ github.repository }}" 'refs/tags/v*' | sed 's#.*refs/tags/##')"
+          if grep -qxF "$tag" <<< "$tags"; then
+            echo "$tag is already tagged: not a release (checks only)"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            newest="$(printf '%s\n' $tags | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -1)"
+            if [[ -n "$newest" && "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]]; then
+              echo "::error::v.mod's $tag is below the newest tag $newest"; exit 1
+            fi
+            echo "$tag is not tagged yet: a release candidate (newest tag: ${newest:-none})"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Install Bun, Zig and V (pinned by sha256)
         run: |
@@ -109,28 +141,25 @@ jobs:
       - name: Compatibility gate
         run: |
           set -euo pipefail
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [[ "${{ steps.is-release.outputs.release }}" == "true" ]]; then
             bun scripts/compat.ts --release
           else
             bun scripts/compat.ts
           fi
 
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
+  tag:
+    if: needs.checks.outputs.release == 'true'
     needs: checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # only for the Release write in scripts/github-release.ts
+      contents: write # only for the tag write in scripts/github-tag.ts
     steps:
-      - name: Clone the tag (no token) and confirm it is the commit `checks` passed
-        env:
-          TAG: ${{ github.ref_name }}
+      - name: Clone (no token) at the commit `checks` passed
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$TAG" "https://github.com/${{ github.repository }}" .
-          test "$(git rev-parse HEAD)" = "${{ needs.checks.outputs.commit }}" \
-            || { echo "::error::tag $TAG moved after the checks ran"; exit 1; }
+          git clone "https://github.com/${{ github.repository }}" .
+          git checkout --detach "${{ needs.checks.outputs.commit }}"
 
       - name: Install Bun (pinned by sha256)
         run: |
@@ -140,9 +169,72 @@ jobs:
           unzip -q -d "$RUNNER_TEMP" "$RUNNER_TEMP/bun.zip" && mkdir -p "$HOME/.bun/bin" && mv "$RUNNER_TEMP/bun-linux-x64/bun" "$HOME/.bun/bin/"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
-      - name: Create the GitHub Release page (REST API)
+      - name: Create the tag (REST API)
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.checks.outputs.tag }}
+          RELEASE_SHA: ${{ needs.checks.outputs.commit }}
+        run: bun scripts/github-tag.ts
+
+  release:
+    needs: [checks, tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # only for the Release write in scripts/github-release.ts
+    steps:
+      - name: Clone (no token) at the commit `checks` passed
+        run: |
+          set -euo pipefail
+          git clone "https://github.com/${{ github.repository }}" .
+          git checkout --detach "${{ needs.checks.outputs.commit }}"
+
+      - name: Install Bun (pinned by sha256)
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 300 --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/bun.zip" "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip"
+          echo "${BUN_SHA256_LINUX}  $RUNNER_TEMP/bun.zip" | sha256sum -c -
+          unzip -q -d "$RUNNER_TEMP" "$RUNNER_TEMP/bun.zip" && mkdir -p "$HOME/.bun/bin" && mv "$RUNNER_TEMP/bun-linux-x64/bun" "$HOME/.bun/bin/"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Create the GitHub Release page from the tag (REST API)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.checks.outputs.tag }}
           RELEASE_SHA: ${{ needs.checks.outputs.commit }}
         run: bun scripts/github-release.ts
+
+  publish:
+    needs: [checks, release]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions: {}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install V (pinned by sha256)
+        run: |
+          set -euo pipefail
+          T="$(cygpath -u "$RUNNER_TEMP")"
+          curl -fsSL --max-time 600 --retry 5 --retry-all-errors --retry-delay 5 -o "$T/v.zip" "https://github.com/vlang/v/releases/download/${V_VERSION}/v_windows.zip"
+          echo "${V_SHA256}  $T/v.zip" | sha256sum -c -
+          unzip -q -d "$T/tools" "$T/v.zip"
+          cygpath -w "$T/tools/v" >> "$GITHUB_PATH"
+
+      - name: Read back as a user — v install from VPM (fatal)
+        env:
+          TAG: ${{ needs.checks.outputs.tag }}
+          SHA: ${{ needs.checks.outputs.commit }}
+        run: |
+          set -euo pipefail
+          M="$(cygpath -u "$RUNNER_TEMP")/vmodules"
+          rm -rf "$M" && mkdir -p "$M"
+          VMODULES="$(cygpath -w "$M")" v install synapticforge1.uwl
+          got="$(sed -n "s/^[[:space:]]*version:[[:space:]]*'\([^']*\)'.*/\1/p" "$M/synapticforge1/uwl/v.mod" | head -1)"
+          head="$(git -C "$M/synapticforge1/uwl" rev-parse HEAD)"
+          echo "VPM installed version $got at $head"
+          test "v$got" = "$TAG" || { echo "::error::VPM installed $got, not ${TAG#v}"; exit 1; }
+          git -C "$M/synapticforge1/uwl" merge-base --is-ancestor "$SHA" HEAD \
+            || { echo "::error::the installed tree does not contain the tagged commit $SHA"; exit 1; }
+          echo "VPM serves ${TAG}: $head contains $SHA"
